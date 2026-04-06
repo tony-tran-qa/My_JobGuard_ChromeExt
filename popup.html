@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JobGuard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 340px;
+      min-height: 200px;
+      background: #080c10;
+      color: #c8d6e5;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+    }
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: #0d1117; }
+    ::-webkit-scrollbar-thumb { background: #1e3a5f; }
+
+    /* Header */
+    .header {
+      background: linear-gradient(180deg, #0a1520 0%, #080c10 100%);
+      border-bottom: 1px solid #1a2f4a;
+      padding: 14px 16px 0;
+    }
+    .logo {
+      font-family: 'Syne', sans-serif;
+      font-size: 20px;
+      font-weight: 800;
+      color: #e2eaf4;
+      letter-spacing: -0.01em;
+    }
+    .logo span { color: #4a9eff; }
+    .logo-sub {
+      font-size: 9px;
+      color: #2a5a8c;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      margin-top: 2px;
+      margin-bottom: 12px;
+    }
+    .tabs {
+      display: flex;
+      gap: 0;
+    }
+    .tab {
+      padding: 7px 14px;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #4a6885;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      background: none;
+      border-left: none;
+      border-right: none;
+      border-top: none;
+      transition: all 0.15s;
+    }
+    .tab:hover { color: #c8d6e5; }
+    .tab.active { color: #4a9eff; border-bottom-color: #4a9eff; }
+
+    /* Body */
+    .body { padding: 14px 16px; }
+
+    /* Inputs */
+    .label {
+      font-size: 9px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #2a5a8c;
+      margin-bottom: 5px;
+      display: block;
+    }
+    .field {
+      width: 100%;
+      background: #0d1520;
+      border: 1px solid #1e3a5f;
+      border-radius: 5px;
+      padding: 8px 10px;
+      color: #c8d6e5;
+      font-family: 'DM Mono', monospace;
+      font-size: 12px;
+      outline: none;
+      margin-bottom: 8px;
+      transition: border-color 0.2s;
+    }
+    .field:focus { border-color: #4a9eff; }
+    .field::placeholder { color: #2a4a6a; }
+
+    .btn-primary {
+      width: 100%;
+      padding: 10px;
+      background: linear-gradient(135deg, #1a3a5c, #0f2540);
+      border: 1px solid #2a5a8c;
+      border-radius: 5px;
+      color: #4a9eff;
+      font-family: 'DM Mono', monospace;
+      font-size: 11px;
+      font-weight: 500;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary:hover:not(:disabled) {
+      background: linear-gradient(135deg, #2a4a6c, #1f3550);
+      border-color: #4a9eff;
+    }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* Result */
+    #result-area { margin-top: 12px; }
+    .result-card {
+      background: #0a1218;
+      border-radius: 6px;
+      padding: 12px;
+      animation: fade-in 0.2s ease;
+    }
+    @keyframes fade-in {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .result-header { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
+    .badge {
+      font-size: 9px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      padding: 3px 8px;
+      border-radius: 3px;
+      text-transform: uppercase;
+    }
+    .risk-low { background: #0d2b1a; border: 1px solid #1a5c35; color: #4ade80; }
+    .risk-medium { background: #2b1f0a; border: 1px solid #854d0e; color: #fbbf24; }
+    .risk-high { background: #2b0a0a; border: 1px solid #991b1b; color: #f87171; }
+    .rec-apply { background: #0d2b1a; border: 1px solid #1a5c35; color: #4ade80; }
+    .rec-caution { background: #2b1f0a; border: 1px solid #854d0e; color: #fbbf24; }
+    .rec-avoid { background: #2b0a0a; border: 1px solid #991b1b; color: #f87171; }
+    .verdict { font-size: 11px; color: #8aafc8; line-height: 1.5; margin-bottom: 10px; }
+    .flags-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px; }
+    .section-label {
+      font-size: 8px; letter-spacing: 0.12em; text-transform: uppercase;
+      color: #2a5a8c; margin-bottom: 4px;
+    }
+    .label-red { color: #7f1d1d; }
+    .label-green { color: #14532d; }
+    .flag { font-size: 10px; line-height: 1.4; margin-bottom: 3px; padding-left: 6px; }
+    .flag-red { color: #fca5a5; border-left: 2px solid #7f1d1d; }
+    .flag-green { color: #86efac; border-left: 2px solid #14532d; }
+    .empty { font-size: 10px; color: #2a4a6a; }
+    .add-bl-btn {
+      width: 100%; margin-top: 8px; padding: 7px;
+      background: #1a0a0a; border: 1px solid #7f1d1d;
+      border-radius: 4px; color: #f87171;
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.06em; cursor: pointer; transition: all 0.15s;
+    }
+    .add-bl-btn:hover { background: #2b0808; }
+
+    .blacklisted-card {
+      background: #1a0505;
+      border: 1px solid #7f1d1d;
+      border-radius: 6px;
+      padding: 12px;
+      animation: fade-in 0.2s ease;
+    }
+    .bl-title { color: #f87171; font-size: 12px; font-weight: 500; margin-bottom: 4px; }
+    .bl-reason { font-size: 11px; color: #fca5a5; line-height: 1.5; }
+
+    .error-card {
+      background: #1a0a0a; border: 1px solid #7f1d1d;
+      border-radius: 6px; padding: 12px;
+      color: #f87171; font-size: 11px; line-height: 1.6;
+    }
+    .error-hint { color: #fca5a5; margin-top: 5px; font-size: 10px; }
+
+    .loading { display: flex; align-items: center; gap: 8px; color: #4a6885; padding: 8px 0; }
+    .spinner {
+      width: 14px; height: 14px;
+      border: 2px solid #1e3a5f; border-top-color: #4a9eff;
+      border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Blacklist Tab */
+    .bl-count { font-size: 10px; color: #4a6885; margin-bottom: 10px; }
+    .bl-row {
+      display: flex; align-items: flex-start; gap: 8px;
+      padding: 8px 10px;
+      background: #0d1520; border: 1px solid #1a2f4a;
+      border-radius: 5px; margin-bottom: 6px;
+    }
+    .bl-info { flex: 1; min-width: 0; }
+    .bl-name { color: #fca5a5; font-size: 11px; margin-bottom: 2px; }
+    .bl-reason-text { font-size: 10px; color: #4a6885; line-height: 1.4; }
+    .rm-btn {
+      padding: 2px 7px;
+      background: #2b0a0a; border: 1px solid #7f1d1d;
+      border-radius: 3px; color: #f87171;
+      font-size: 9px; font-family: 'DM Mono', monospace;
+      cursor: pointer; flex-shrink: 0; transition: all 0.15s;
+    }
+    .rm-btn:hover { background: #3f1010; }
+    .add-form {
+      background: #0a1520; border: 1px solid #1a2f4a;
+      border-radius: 5px; padding: 10px; margin-bottom: 10px;
+    }
+    .add-row { display: flex; gap: 6px; margin-top: 6px; }
+    .btn-add-confirm {
+      padding: 7px 12px;
+      background: #1a0a0a; border: 1px solid #7f1d1d;
+      border-radius: 4px; color: #f87171;
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      cursor: pointer; white-space: nowrap; transition: all 0.15s;
+    }
+    .btn-add-confirm:hover { background: #2b0808; }
+    .add-toggle-btn {
+      width: 100%; padding: 7px;
+      background: #0d1a2a; border: 1px solid #1e3a5f;
+      border-radius: 4px; color: #4a9eff;
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.08em; cursor: pointer; margin-bottom: 10px;
+      transition: all 0.15s;
+    }
+    .add-toggle-btn:hover { background: #1a2f4a; }
+    .empty-state { text-align: center; padding: 30px 0; color: #2a4a6a; }
+
+    /* Settings Tab */
+    .settings-row { margin-bottom: 16px; }
+    .settings-hint { font-size: 10px; color: #4a6885; margin-top: 5px; line-height: 1.6; }
+    .settings-hint a { color: #4a9eff; text-decoration: none; }
+    .btn-save {
+      padding: 8px 16px;
+      background: #0d2540; border: 1px solid #1e4a7f;
+      border-radius: 4px; color: #4a9eff;
+      font-family: 'DM Mono', monospace; font-size: 10px;
+      letter-spacing: 0.08em; cursor: pointer; transition: all 0.15s;
+    }
+    .btn-save:hover { background: #1a3a5f; }
+    .saved-msg { color: #4ade80; font-size: 10px; margin-left: 8px; }
+    .divider { border: none; border-top: 1px solid #0d1a2a; margin: 14px 0; }
+
+    /* Status indicator */
+    .status-row {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 10px; color: #4a6885;
+      padding: 8px 16px;
+      border-top: 1px solid #0d1a2a;
+    }
+    .status-dot {
+      width: 6px; height: 6px; border-radius: 50%;
+      background: #4ade80; flex-shrink: 0;
+    }
+    .status-dot.inactive { background: #7f1d1d; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo"><span>JOB</span>GUARD</div>
+    <div class="logo-sub">LinkedIn Scam Detector</div>
+    <div class="tabs">
+      <button class="tab active" data-tab="vet">Vet</button>
+      <button class="tab" data-tab="blacklist">Blacklist</button>
+      <button class="tab" data-tab="settings">Settings</button>
+    </div>
+  </div>
+
+  <!-- VET TAB -->
+  <div class="body" id="tab-vet">
+    <label class="label">Company Name</label>
+    <input class="field" id="company-input" placeholder="e.g. Anthropic, QuickHire..." />
+    <label class="label">Role (optional)</label>
+    <input class="field" id="role-input" placeholder="e.g. Software Engineer..." />
+    <button class="btn-primary" id="vet-btn">▶  Run Vetting Check</button>
+    <div id="result-area"></div>
+  </div>
+
+  <!-- BLACKLIST TAB -->
+  <div class="body" id="tab-blacklist" style="display:none">
+    <button class="add-toggle-btn" id="add-toggle-btn">+ Add Company Manually</button>
+    <div class="add-form" id="add-form" style="display:none">
+      <label class="label">Company Name</label>
+      <input class="field" id="bl-name-input" placeholder="Company name..." />
+      <label class="label">Reason</label>
+      <input class="field" id="bl-reason-input" placeholder="Why flagged? (optional)" />
+      <div class="add-row">
+        <button class="btn-add-confirm" id="bl-add-btn">🚫 Add to Blacklist</button>
+      </div>
+    </div>
+    <div id="bl-count" class="bl-count">Loading...</div>
+    <div id="bl-list"></div>
+  </div>
+
+  <!-- SETTINGS TAB -->
+  <div class="body" id="tab-settings" style="display:none">
+    <div class="settings-row">
+      <label class="label">Anthropic API Key</label>
+      <input class="field" id="api-key-input" type="password" placeholder="sk-ant-..." />
+      <div class="settings-hint">
+        Required for AI vetting. Get your key at
+        <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>
+      </div>
+      <div style="margin-top:8px; display:flex; align-items:center;">
+        <button class="btn-save" id="save-key-btn">Save Key</button>
+        <span class="saved-msg" id="saved-msg" style="display:none">✓ Saved</span>
+      </div>
+    </div>
+    <hr class="divider" />
+    <div class="settings-row">
+      <div class="label" style="margin-bottom:6px">How to use JobGuard</div>
+      <div class="settings-hint" style="line-height:1.8">
+        1. Browse LinkedIn job listings normally<br/>
+        2. Look for <strong style="color:#4a9eff">⬡ VET</strong> badges next to companies<br/>
+        3. Click any badge or the VET button on job pages<br/>
+        4. Right-click any company name → "Vet with JobGuard"<br/>
+        5. Blacklisted companies show a 🚫 red banner instantly
+      </div>
+    </div>
+  </div>
+
+  <div class="status-row">
+    <div class="status-dot" id="status-dot"></div>
+    <span id="status-text">Checking...</span>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

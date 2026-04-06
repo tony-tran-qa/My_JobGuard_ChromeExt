@@ -6,7 +6,6 @@
 
   let blacklist = [];
   let scannedCompanies = new Set();
-  let sidebarOpen = false;
 
   // Load blacklist on start
   chrome.runtime.sendMessage({ type: "GET_BLACKLIST" }, (res) => {
@@ -202,7 +201,6 @@
   // ─── SIDEBAR ────────────────────────────────────────────────────
   function openSidebar(company, role) {
     closeSidebar();
-    sidebarOpen = true;
 
     const overlay = document.createElement("div");
     overlay.id = "jg-overlay";
@@ -252,7 +250,6 @@
   function closeSidebar() {
     document.getElementById("jg-overlay")?.remove();
     document.getElementById("jg-sidebar")?.remove();
-    sidebarOpen = false;
   }
 
   function runVet() {

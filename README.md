@@ -1,13 +1,15 @@
 # JobGuard
 
-[![CI](https://github.com/tony-tran-qa/jobguard/actions/workflows/lint.yml/badge.svg)](https://github.com/tony-tran-qa/jobguard/actions/workflows/lint.yml)
+[![CI](https://github.com/tony-tran-qa/My_JobGuard_ChromeExt/actions/workflows/lint.yml/badge.svg)](https://github.com/tony-tran-qa/My_JobGuard_ChromeExt/actions/workflows/lint.yml)
 ![Manifest](https://img.shields.io/badge/Manifest-v3-blue)
 ![Chrome](https://img.shields.io/badge/Chrome-Extension-yellow?logo=googlechrome)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-**AI-powered LinkedIn scam detector — Chrome Extension (Manifest V3)**
+**In-page job vetting for LinkedIn: Chrome Extension (Manifest V3)**
 
-JobGuard runs silently as you browse LinkedIn, auto-flagging blacklisted companies and letting you vet any job posting with one click using the Anthropic API.
+JobGuard checks companies as you browse LinkedIn. It flags blacklisted companies automatically and vets any posting with one click using the Anthropic API. Results are a screening aid, not a verdict.
+
+> This extension is the lightweight, in-page tool. For the full workspace (records, favorites, agencies and IT-consulting firm types, per-tab JSON export and import, folder backup) see the companion web app: [My_JobGuard_ReactApp](https://github.com/tony-tran-qa/My_JobGuard_ReactApp). UI tests for the web app are in [My_JobGuard_TestWithRobotAndPlaywright](https://github.com/tony-tran-qa/My_JobGuard_TestWithRobotAndPlaywright).
 
 ---
 

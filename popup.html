@@ -365,9 +365,9 @@
     <div class="ag-head">
       <div id="ag-count" class="rec-count" style="margin-bottom:0">Loading...</div>
       <div class="rec-actions">
+        <button class="icon-btn" id="ag-scan-btn">↻ Scan Records</button>
         <button class="icon-btn" data-export="agencies">⬇ Export</button>
         <button class="icon-btn" data-import="agencies">⬆ Import</button>
-        <button class="icon-btn" id="ag-scan-btn">↻ Scan Records</button>
         <button class="icon-btn" id="ag-add-toggle">+ Add</button>
       </div>
     </div>
@@ -395,12 +395,13 @@
   <!-- BLACKLIST TAB -->
   <div class="body" id="tab-blacklist" style="display:none">
     <div class="tb-bar">
+      <div id="bl-count" class="bl-count" style="margin-bottom:0">Loading...</div>
       <div class="rec-actions">
         <button class="icon-btn" data-export="blacklist">⬇ Export</button>
         <button class="icon-btn" data-import="blacklist">⬆ Import</button>
+        <button class="icon-btn" id="add-toggle-btn">+ Add Manually</button>
       </div>
     </div>
-    <button class="add-toggle-btn" id="add-toggle-btn">+ Add Company Manually</button>
     <div class="add-form" id="add-form" style="display:none">
       <label class="label">Company Name</label>
       <input class="field" id="bl-name-input" placeholder="Company name..." />
@@ -410,7 +411,6 @@
         <button class="btn-add-confirm" id="bl-add-btn">🚫 Add to Blacklist</button>
       </div>
     </div>
-    <div id="bl-count" class="bl-count">Loading...</div>
     <div id="bl-list"></div>
   </div>
 

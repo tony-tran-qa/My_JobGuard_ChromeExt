@@ -212,7 +212,7 @@ document.addEventListener("DOMContentLoaded", () => {
   addToggle.addEventListener("click", () => {
     const open = addForm.style.display !== "none";
     addForm.style.display = open ? "none" : "block";
-    addToggle.textContent = open ? "+ Add Company Manually" : "✕ Cancel";
+    addToggle.textContent = open ? "+ Add Manually" : "✕ Cancel";
   });
 
   document.getElementById("bl-add-btn")?.addEventListener("click", () => {
@@ -226,7 +226,7 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("bl-name-input").value = "";
       document.getElementById("bl-reason-input").value = "";
       addForm.style.display = "none";
-      addToggle.textContent = "+ Add Company Manually";
+      addToggle.textContent = "+ Add Manually";
       loadBlacklist();
     });
   });

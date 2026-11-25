@@ -1,6 +1,9 @@
 // JobGuard Background Service Worker
 // Handles AI vetting API calls and context menu
 
+/* global importScripts, JobGuardData */
+importScripts("lib/jobguard-data.js");
+
 const DEFAULT_BLACKLIST = [
   { name: "TechHire Global", reason: "Known phishing recruiter, requests SSN upfront" },
   { name: "RemoteWork Pro", reason: "Fake job listings, data harvesting" },
@@ -67,7 +70,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "VET_COMPANY") {
     vetCompany(message.company, message.role)
-      .then(result => sendResponse({ success: true, result }))
+      .then(async result => {
+        await saveRecord(message.company, message.role, result);
+        sendResponse({ success: true, result });
+      })
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true; // keep channel open for async
   }
@@ -125,6 +131,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 });
+
+// Keep a record of every successful vet so the Records tab (and backups) have it.
+function saveRecord(company, role, result) {
+  return new Promise(resolve => {
+    chrome.storage.local.get(["records"], r => {
+      const record = JobGuardData.buildRecord(company, role, result);
+      chrome.storage.local.set({ records: JobGuardData.upsertRecord(r.records, record) }, resolve);
+    });
+  });
+}
 
 function checkBlacklist(blacklist, name) {
   const lower = name.toLowerCase().trim();

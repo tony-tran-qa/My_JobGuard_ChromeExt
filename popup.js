@@ -1,4 +1,5 @@
 // JobGuard Popup Script
+/* global JobGuardData */
 
 document.addEventListener("DOMContentLoaded", () => {
   // ─── TAB SWITCHING ───────────────────────────────────────────
@@ -6,6 +7,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const tabPanels = {
     vet: document.getElementById("tab-vet"),
     blacklist: document.getElementById("tab-blacklist"),
+    records: document.getElementById("tab-records"),
+    favorites: document.getElementById("tab-favorites"),
     settings: document.getElementById("tab-settings"),
   };
 
@@ -17,6 +20,8 @@ document.addEventListener("DOMContentLoaded", () => {
         el.style.display = key === tab.dataset.tab ? "block" : "none";
       });
       if (tab.dataset.tab === "blacklist") loadBlacklist();
+      if (tab.dataset.tab === "records") loadRecords();
+      if (tab.dataset.tab === "favorites") loadFavorites();
     });
   });
 
@@ -197,6 +202,134 @@ document.addEventListener("DOMContentLoaded", () => {
       document.getElementById("status-dot").className = `status-dot ${key ? "" : "inactive"}`;
       document.getElementById("status-text").textContent = key ? "AI vetting active" : "No API key set";
     });
+  });
+
+  // ─── FULL TAB ────────────────────────────────────────────────
+  if (new URLSearchParams(location.search).get("full") === "1") {
+    document.body.classList.add("fulltab");
+  }
+  document.getElementById("open-tab-btn")?.addEventListener("click", () => {
+    chrome.tabs.create({ url: chrome.runtime.getURL("popup.html?full=1") });
+    window.close();
+  });
+
+  // ─── STORAGE HELPERS ─────────────────────────────────────────
+  const getStore = (keys) => new Promise(res => chrome.storage.local.get(keys, res));
+  const setStore = (obj) => new Promise(res => chrome.storage.local.set(obj, res));
+
+  // ─── RECORDS + FAVORITES ─────────────────────────────────────
+  function fmtDate(ts) { return ts ? new Date(ts).toLocaleDateString() : ""; }
+
+  function recRowHtml(r, { favorite, showDelete }) {
+    const riskClass = { LOW: "risk-low", MEDIUM: "risk-medium", HIGH: "risk-high" }[r.riskLevel] || "risk-medium";
+    const recClass = { APPLY: "rec-apply", CAUTION: "rec-caution", AVOID: "rec-avoid" }[r.recommendation] || "";
+    const flags = (arr, cls) => (arr || []).map(f => `<div class="flag ${cls}">${escHtml(f)}</div>`).join("");
+    return `
+      <div class="rec-row" data-id="${escHtml(String(r.id))}">
+        <div class="rec-top">
+          <div class="rec-main">
+            <div class="rec-company">${escHtml(r.company)}${r.role ? ` <span style="color:#4a6885">· ${escHtml(r.role)}</span>` : ""}</div>
+            <div class="rec-meta">${escHtml(fmtDate(r.ts || r.favoritedAt))}</div>
+          </div>
+          <span class="badge ${riskClass}">${escHtml(r.riskLevel || "?")}</span>
+          <span class="badge ${recClass}">${escHtml(r.recommendation || "")}</span>
+          <div class="rec-actions">
+            <button class="icon-btn ${favorite ? "on" : ""}" data-act="fav" title="Favorite">${favorite ? "★" : "☆"}</button>
+            ${showDelete ? `<button class="icon-btn danger" data-act="del">Delete</button>` : ""}
+          </div>
+        </div>
+        <div class="rec-detail">
+          <div>${escHtml(r.verdict)}</div>
+          ${flags(r.redFlags, "flag-red")}${flags(r.greenFlags, "flag-green")}
+        </div>
+      </div>`;
+  }
+
+  // One click handler per list: buttons run an action, anywhere else expands the row.
+  function wireRows(listEl, handlers) {
+    listEl.onclick = (e) => {
+      const row = e.target.closest(".rec-row");
+      if (!row) return;
+      const btn = e.target.closest("button[data-act]");
+      if (!btn) { row.classList.toggle("open"); return; }
+      handlers[btn.dataset.act]?.(row.dataset.id, btn);
+    };
+  }
+
+  async function loadRecords() {
+    const { records = [], favorites = [] } = await getStore(["records", "favorites"]);
+    const favIds = new Set(favorites.map(f => String(f.id)));
+    document.getElementById("rec-count").textContent = `${records.length} vetting records`;
+    const listEl = document.getElementById("rec-list");
+    listEl.innerHTML = records.length
+      ? records.map(r => recRowHtml(r, { favorite: favIds.has(String(r.id)), showDelete: true })).join("")
+      : `<div class="empty-state">No vetting records yet. Run a check and it will appear here.</div>`;
+    wireRows(listEl, {
+      fav: async (id) => {
+        const rec = records.find(r => String(r.id) === id);
+        if (!rec) return;
+        await setStore({ favorites: JobGuardData.toggleFavorite(favorites, rec) });
+        loadRecords();
+      },
+      del: async (id, btn) => {
+        // Two clicks: the first asks "Sure?", the second deletes.
+        if (btn.dataset.sure !== "1") { btn.dataset.sure = "1"; btn.textContent = "Sure?"; return; }
+        await setStore({ records: records.filter(r => String(r.id) !== id) });
+        loadRecords();
+      },
+    });
+  }
+
+  async function loadFavorites() {
+    const { favorites = [] } = await getStore(["favorites"]);
+    document.getElementById("fav-count").textContent = `${favorites.length} favorites`;
+    const listEl = document.getElementById("fav-list");
+    listEl.innerHTML = favorites.length
+      ? favorites.map(r => recRowHtml(r, { favorite: true, showDelete: false })).join("")
+      : `<div class="empty-state">No favorites yet. Star a record to keep it here.</div>`;
+    wireRows(listEl, {
+      fav: async (id) => {
+        await setStore({ favorites: favorites.filter(f => String(f.id) !== id) });
+        loadFavorites();
+      },
+    });
+  }
+
+  // ─── BACKUP (export / import) ────────────────────────────────
+  const BACKUP_KEYS = ["blacklist", "records", "favorites", "agencies"];
+
+  function backupMsg(ok, text) {
+    const el = document.getElementById("backup-msg");
+    el.className = `backup-msg ${ok ? "ok" : "err"}`;
+    el.textContent = text;
+  }
+
+  document.getElementById("export-btn")?.addEventListener("click", async () => {
+    const data = await getStore(BACKUP_KEYS);
+    const blob = new Blob([JobGuardData.buildBackup(data)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = JobGuardData.BACKUP_NAME;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    const n = (k) => (data[k] || []).length;
+    backupMsg(true, `Exported ${n("blacklist")} blacklist entries, ${n("records")} records, ${n("favorites")} favorites.`);
+  });
+
+  const importFile = document.getElementById("import-file");
+  document.getElementById("import-btn")?.addEventListener("click", () => importFile.click());
+  importFile?.addEventListener("change", async () => {
+    const file = importFile.files[0];
+    if (!file) return;
+    try {
+      const incoming = JobGuardData.parseImport(await file.text());
+      const { data, added } = JobGuardData.applyImport(await getStore(BACKUP_KEYS), incoming);
+      await setStore(data);
+      backupMsg(true, `Imported (merged, nothing deleted). Added ${added.blacklist} blacklist, ${added.records} records, ${added.favorites} favorites, ${added.agencies} agencies.`);
+    } catch (err) {
+      backupMsg(false, `Import failed: ${err.message}`);
+    }
+    importFile.value = "";
   });
 
   // ─── UTILS ───────────────────────────────────────────────────

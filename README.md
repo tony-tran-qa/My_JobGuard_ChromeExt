@@ -33,12 +33,33 @@ JobGuard checks companies as you browse LinkedIn. It flags blacklisted companies
 | 🔄 SPA navigation | MutationObserver re-scans on LinkedIn's client-side route changes |
 | 🏢 Agencies | Staffing and IT consulting firms are tagged automatically when a vet identifies one (the AI is asked for an explicit firm type), or add them by hand; Scan Records finds ones you vetted earlier |
 | 🧾 Records and favorites | Every vet is saved as a record you can star, expand or delete; same record format as the web app |
+| 🌐 Company website | The vet summary shows the company and its home website. A homepage URL you type is used for the check; otherwise the website the AI knows is shown and labelled "AI suggested, verify it yourself". It is saved with each record |
+| 🏢 Company intel | Type, ownership, headcount, revenue, founded, HQ, verification steps and a confidence note, same as the web app |
+| 🔎 Search, filter, sort | Records and Favorites have search; Records also filters by agency, risk, recommendation and ownership, and sorts newest, oldest, highest risk or A to Z |
+| ⬇⬆ Per-tab Export / Import | Blacklist, Records, Favorites and Agencies each export and import their own file (jobguard-blacklist.json and so on), compatible with the web app |
 | 🔑 Test Key | Settings has a Test Key button (same as the web app) that checks your key with a tiny request |
 | 💾 Backup and restore | Export or import blacklist, records and favorites as one JSON file shared with the JobGuard web app (merge only, nothing is deleted) |
 | 🪟 Full-tab view | The popup is 680px wide; the Full tab button opens the same UI in a browser tab |
 | 🔑 Key managed locally | API key stored in Chrome local storage — never leaves your machine |
 
 ---
+
+## Differences from the web app
+
+The JobGuard web app is the reference design and the extension follows it: same tabs in the same order, same buttons in the same order, same AI prompt and model, same backup files. The differences below are deliberate or come from the browser.
+
+| Area | Web app | Extension |
+|---|---|---|
+| Backup folder | Can remember a backup folder and restore from it | Chrome extensions cannot keep a folder handle. Exports go to the browser Downloads folder and restore is from a file only |
+| Where data lives | Browser localStorage on localhost | `chrome.storage.local`, a separate store. Move data between the two with the backup file |
+| Confirmations | Dialogs and Yes / No prompts | Click again to confirm (Delete, Clear and Remove show "Sure?") |
+| Vet result | Full-width card with a coloured risk banner | Compact card (680 px popup), same fields and the same buttons: + Blacklist, Favorite, Records, Clear |
+| Intel in rows | Pills for type, ownership, headcount, revenue, founded, HQ and website | One text line with the same details |
+| Default blacklist warning | Warns when no saved blacklist is found and the default list is showing | The default list is seeded once at install, with no warning |
+| Records | Favorite, + Blacklist, + Agencies, Delete in the expanded row | Same four actions, same order |
+| Extension only | | LinkedIn badges and banners, right-click Vet, popup or Full tab, no dev server needed |
+
+If you change a feature in one app, update the other and this table.
 
 ## Installation
 
@@ -91,7 +112,7 @@ jobguard-extension/
 │   └── jobguard-data.js   Records, favorites and backup helpers (shared backup format with the web app)
 ├── tests/
 │   ├── jobguard.test.js        Jest unit tests for jobguard-core (29 cases)
-│   └── jobguard-data.test.js   Jest unit tests for jobguard-data (34 cases)
+│   └── jobguard-data.test.js   Jest unit tests for jobguard-data (54 cases)
 ├── manifest.json          MV3 config — permissions, host_permissions, service worker
 ├── background.js          Service worker — Anthropic API calls, cache, context menus, message bus
 ├── content.js             LinkedIn scanner — DOM injection, badge/sidebar/banner rendering
@@ -135,6 +156,7 @@ Jest unit tests cover the pure logic layer in `lib/jobguard-core.js` and `lib/jo
 | `parseVetResult` | 9 | Valid results, all enum values, invalid inputs, missing fields, array defaulting |
 | `isCacheExpired` | 5 | TTL boundary conditions, fresh vs stale, injectable clock |
 | `buildBackup`, `parseImport`, `applyImport` | 9 | Round trip, web-app backup accepted, plain blacklist array accepted, bad files rejected, merge never deletes |
+| `extractDomain`, `parseTab`, `mergeTab`, `filterRecords`, `buildRecord` website | 20 | URL to domain, per-tab file parsing and merge, record search, filter and sort, website saved on records |
 | `mergeByName`, `mergeById`, `cleanBlacklist`, `cleanAgencies`, `cleanEntries` | 9 | Case-insensitive dedupe, id dedupe, normalisation of imported entries |
 | `buildRecord`, `upsertRecord`, `toggleFavorite` | 9 |
 | `inferOrgType`, `addAgencyIfNew`, `scanRecordsForAgencies` | 7 | Explicit orgType wins, keyword fallback, duplicate and invalid names skipped, scan counts additions | Record shape matches the web app, same company and role updates in place, favorite toggle |

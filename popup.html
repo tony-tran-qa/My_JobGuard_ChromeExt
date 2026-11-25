@@ -171,6 +171,12 @@
     .step { font-size:10px; color:#8aafc8; line-height:1.4; margin-bottom:3px; padding-left:6px; border-left:2px solid #1e3a5f; }
     .res-actions { display:flex; gap:8px; margin-top:8px; }
     .res-actions button { flex:1; margin-top:0; }
+    .recs-btn.on { color:#fbbf24; border-color:#7a5c12; }
+    .stats { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; margin-bottom:10px; }
+    .stat { background:#0a1218; border:1px solid #1a2f4a; border-radius:6px; padding:8px; text-align:center; }
+    .stat-val { font-size:18px; font-weight:500; }
+    .stat-lbl { font-size:8px; letter-spacing:.1em; text-transform:uppercase; color:#2a5a8c; }
+    .row-actions { margin-top:8px; flex-wrap:wrap; }
     .recs-btn { background:#0d1520; border:1px solid #1e3a5f; border-radius:4px; color:#4a9eff; font-family:'DM Mono',monospace; font-size:10px; padding:7px; cursor:pointer; }
     .recs-btn:hover { border-color:#4a9eff; }
     .toolbar { display:flex; gap:6px; margin-bottom:8px; }
@@ -416,6 +422,7 @@
 
   <!-- RECORDS TAB -->
   <div class="body" id="tab-records" style="display:none">
+    <div class="stats" id="rec-stats"></div>
     <div class="toolbar">
       <input class="field tb-search" id="rec-search" placeholder="Search company, role, or type..." />
       <select class="field tb-sel" id="rec-filter"></select>

@@ -153,7 +153,9 @@ document.addEventListener("DOMContentLoaded", () => {
               ${r.verificationSteps.map((s, i) => `<div class="step">${i + 1}. ${escHtml(s)}</div>`).join("")}` : ""}
             <div class="res-actions">
               <button class="add-bl-btn" id="popup-add-bl">+ Blacklist</button>
+              <button class="recs-btn" id="popup-fav">☆ Favorite</button>
               <button class="recs-btn" id="popup-go-records">📋 Records</button>
+              <button class="recs-btn" id="popup-clear">Clear</button>
             </div>
           </div>
         `;
@@ -161,13 +163,33 @@ document.addEventListener("DOMContentLoaded", () => {
         document.getElementById("popup-go-records")?.addEventListener("click", () => {
           document.querySelector('.tab[data-tab="records"]').click();
         });
-        document.getElementById("popup-add-bl")?.addEventListener("click", () => {
-          chrome.runtime.sendMessage({
-            type: "ADD_TO_BLACKLIST",
-            entry: { name: company, reason: r.verdict },
-          }, () => {
-            resultArea.innerHTML = `<div class="blacklisted-card"><div class="bl-title">✓ Added to blacklist</div></div>`;
-          });
+        document.getElementById("popup-add-bl")?.addEventListener("click", async () => {
+          await addToBlacklist(company, r.verdict);
+          document.querySelector('.tab[data-tab="blacklist"]').click();
+        });
+        const favBtn = document.getElementById("popup-fav");
+        const findRec = async () => {
+          const { records = [], favorites = [] } = await getStore(["records", "favorites"]);
+          const rec = records.find(x => x.company.toLowerCase() === company.toLowerCase() && (x.role || "").toLowerCase() === role.toLowerCase());
+          return { rec, favorites };
+        };
+        const paintFav = async () => {
+          const { rec, favorites } = await findRec();
+          const on = !!rec && favorites.some(f => String(f.id) === String(rec.id));
+          favBtn.textContent = on ? "★ Favorited" : "☆ Favorite";
+          favBtn.classList.toggle("on", on);
+        };
+        paintFav();
+        favBtn?.addEventListener("click", async () => {
+          const { rec, favorites } = await findRec();
+          if (rec) await setStore({ favorites: JobGuardData.toggleFavorite(favorites, rec) });
+          paintFav();
+        });
+        document.getElementById("popup-clear")?.addEventListener("click", () => {
+          resultArea.innerHTML = "";
+          companyInput.value = ""; urlInput.value = ""; roleInput.value = "";
+          delete companyInput.dataset.auto;
+          companyInput.focus();
         });
       });
     });
@@ -330,10 +352,6 @@ document.addEventListener("DOMContentLoaded", () => {
           </div>
           <span class="badge ${riskClass}">${escHtml(r.riskLevel || "?")}</span>
           <span class="badge ${recClass}">${escHtml(r.recommendation || "")}</span>
-          <div class="rec-actions">
-            <button class="icon-btn ${favorite ? "on" : ""}" data-act="fav" title="Favorite">${favorite ? "★" : "☆"}</button>
-            ${showDelete ? `<button class="icon-btn danger" data-act="del">Delete</button>` : ""}
-          </div>
         </div>
         <div class="rec-detail">
           <div>${escHtml(r.verdict)}</div>
@@ -341,6 +359,14 @@ document.addEventListener("DOMContentLoaded", () => {
           ${r.website ? `<div class="rec-intel">🌐 ${escHtml(r.website)}${r.url ? " (URL you entered)" : " (AI suggested)"}</div>` : ""}
           ${flags(r.redFlags, "flag-red")}${flags(r.greenFlags, "flag-green")}
           ${(r.verificationSteps || []).map((s, i) => `<div class="rec-step">${i + 1}. ${escHtml(s)}</div>`).join("")}
+          <div class="rec-actions row-actions">
+            ${showDelete ? `
+              <button class="icon-btn ${favorite ? "on" : ""}" data-act="fav">${favorite ? "★ Saved" : "☆ Favorite"}</button>
+              <button class="icon-btn danger" data-act="bl">+ Blacklist</button>
+              <button class="icon-btn" data-act="ag">+ Agencies</button>
+              <button class="icon-btn danger" data-act="del">Delete</button>`
+            : `<button class="icon-btn on" data-act="fav">★ Remove</button>`}
+          </div>
         </div>
       </div>`;
   }
@@ -375,6 +401,13 @@ document.addEventListener("DOMContentLoaded", () => {
   async function loadRecords() {
     const { records = [], favorites = [], agencies = [] } = await getStore(["records", "favorites", "agencies"]);
     const favIds = new Set(favorites.map(f => String(f.id)));
+    const n = (fn) => records.filter(fn).length;
+    document.getElementById("rec-stats").innerHTML = [
+      ["Total", records.length, "#4a9eff"],
+      ["High Risk", n(r => r.riskLevel === "HIGH"), "#f87171"],
+      ["Caution", n(r => r.recommendation === "CAUTION"), "#fbbf24"],
+      ["Safe", n(r => r.recommendation === "APPLY"), "#4ade80"],
+    ].map(([l, v, col]) => `<div class="stat"><div class="stat-val" style="color:${col}">${v}</div><div class="stat-lbl">${l}</div></div>`).join("");
     const shown = JobGuardData.filterRecords(records, agencies, {
       search: document.getElementById("rec-search").value,
       filter: document.getElementById("rec-filter").value,
@@ -392,6 +425,14 @@ document.addEventListener("DOMContentLoaded", () => {
         if (!rec) return;
         await setStore({ favorites: JobGuardData.toggleFavorite(favorites, rec) });
         loadRecords();
+      },
+      bl: async (id) => {
+        const rec = records.find(r => String(r.id) === id);
+        if (rec) await addToBlacklist(rec.company, rec.verdict);
+      },
+      ag: (id) => {
+        const rec = records.find(r => String(r.id) === id);
+        if (rec) openAgencyForm(rec.company);
       },
       del: async (id, btn) => {
         // Two clicks: the first asks "Sure?", the second deletes.
@@ -426,11 +467,30 @@ document.addEventListener("DOMContentLoaded", () => {
       ? shown.map(r => recRowHtml(r, { favorite: true, showDelete: false })).join("")
       : `<div class="empty-state">${favorites.length ? "No favorites match your search." : "No favorites yet. Star a record to keep it here."}</div>`;
     wireRows(listEl, {
-      fav: async (id) => {
+      fav: async (id, btn) => {
+        if (btn.dataset.sure !== "1") { btn.dataset.sure = "1"; btn.textContent = "Remove? Click again"; return; }
         await setStore({ favorites: favorites.filter(f => String(f.id) !== id) });
         loadFavorites();
       },
     });
+  }
+
+  async function addToBlacklist(name, reason) {
+    const { blacklist = [] } = await getStore(["blacklist"]);
+    if (blacklist.some(e => e.name.toLowerCase() === name.toLowerCase())) {
+      tabMsg(false, `${name} is already on the blacklist.`);
+      return false;
+    }
+    await setStore({ blacklist: [...blacklist, { name, reason: reason || "Manually flagged" }] });
+    tabMsg(true, `Added ${name} to the blacklist.`);
+    return true;
+  }
+
+  function openAgencyForm(name) {
+    document.querySelector('.tab[data-tab="agencies"]').click();
+    if (document.getElementById("ag-form").style.display === "none") document.getElementById("ag-add-toggle").click();
+    document.getElementById("ag-name-input").value = name;
+    document.getElementById("ag-name-input").focus();
   }
 
   // ─── PER-TAB EXPORT / IMPORT (same files as the web app) ─────

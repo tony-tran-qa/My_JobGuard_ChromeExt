@@ -21,3 +21,6 @@ dist/
 
 # Test coverage output
 coverage/
+
+# Test results kept locally
+results/

@@ -31,6 +31,7 @@ JobGuard checks companies as you browse LinkedIn. It flags blacklisted companies
 | 💾 Result caching | Repeated lookups for the same company skip the API (100-entry LRU) |
 | 🖱️ Right-click menu | Vet or blacklist any selected text from anywhere on the page |
 | 🔄 SPA navigation | MutationObserver re-scans on LinkedIn's client-side route changes |
+| 🏢 Agencies | Staffing and IT consulting firms are tagged automatically when a vet identifies one (the AI is asked for an explicit firm type), or add them by hand; Scan Records finds ones you vetted earlier |
 | 🧾 Records and favorites | Every vet is saved as a record you can star, expand or delete; same record format as the web app |
 | 💾 Backup and restore | Export or import blacklist, records and favorites as one JSON file shared with the JobGuard web app (merge only, nothing is deleted) |
 | 🪟 Full-tab view | The popup is 680px wide; the Full tab button opens the same UI in a browser tab |
@@ -76,7 +77,7 @@ A **⬡ JobGuard Vet** button appears near the Apply button. Blacklisted compani
 Highlight any company name → right-click → **Vet this company with JobGuard** or **Add to JobGuard Blacklist**.
 
 ### Extension popup
-Click the toolbar icon to manually vet any company, manage your blacklist, browse saved records and favorites, export or import a backup, or update your API key. Use **Full tab** (top right) for a full-size view.
+Click the toolbar icon to manually vet any company, browse saved records and favorites, keep a list of staffing and IT consulting firms, manage your blacklist, export or import a backup, or update your API key. Use **Full tab** (top right) for a full-size view.
 
 ---
 
@@ -89,13 +90,13 @@ jobguard-extension/
 │   └── jobguard-data.js   Records, favorites and backup helpers (shared backup format with the web app)
 ├── tests/
 │   ├── jobguard.test.js        Jest unit tests for jobguard-core (29 cases)
-│   └── jobguard-data.test.js   Jest unit tests for jobguard-data (27 cases)
+│   └── jobguard-data.test.js   Jest unit tests for jobguard-data (34 cases)
 ├── manifest.json          MV3 config — permissions, host_permissions, service worker
 ├── background.js          Service worker — Anthropic API calls, cache, context menus, message bus
 ├── content.js             LinkedIn scanner — DOM injection, badge/sidebar/banner rendering
 ├── content.css            Styles for all injected UI elements
-├── popup.html             Toolbar popup — 5-tab layout (Vet / Blacklist / Records / Favorites / Settings)
-├── popup.js               Popup logic — blacklist CRUD, records, favorites, backup, API key, result rendering
+├── popup.html             Toolbar popup — 6-tab layout, same order as the web app (Vet / Records / Favorites / Agencies / Blacklist / Settings)
+├── popup.js               Popup logic — blacklist CRUD, records, favorites, agencies, backup, API key, result rendering
 ├── jest.config.js         Jest configuration
 └── icons/                 16 / 48 / 128px PNG icons
 ```
@@ -132,9 +133,10 @@ Jest unit tests cover the pure logic layer in `lib/jobguard-core.js` and `lib/jo
 | `buildCacheKey` | 5 | Normalisation, default role, key uniqueness |
 | `parseVetResult` | 9 | Valid results, all enum values, invalid inputs, missing fields, array defaulting |
 | `isCacheExpired` | 5 | TTL boundary conditions, fresh vs stale, injectable clock |
-| `buildBackup`, `parseImport`, `applyImport` | 8 | Round trip, web-app backup accepted, plain blacklist array accepted, bad files rejected, merge never deletes |
+| `buildBackup`, `parseImport`, `applyImport` | 9 | Round trip, web-app backup accepted, plain blacklist array accepted, bad files rejected, merge never deletes |
 | `mergeByName`, `mergeById`, `cleanBlacklist`, `cleanAgencies`, `cleanEntries` | 9 | Case-insensitive dedupe, id dedupe, normalisation of imported entries |
-| `buildRecord`, `upsertRecord`, `toggleFavorite` | 10 | Record shape matches the web app, same company and role updates in place, favorite toggle |
+| `buildRecord`, `upsertRecord`, `toggleFavorite` | 9 |
+| `inferOrgType`, `addAgencyIfNew`, `scanRecordsForAgencies` | 7 | Explicit orgType wins, keyword fallback, duplicate and invalid names skipped, scan counts additions | Record shape matches the web app, same company and role updates in place, favorite toggle |
 
 ### What is not tested (and why)
 

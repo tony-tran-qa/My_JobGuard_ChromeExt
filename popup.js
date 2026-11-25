@@ -9,6 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
     blacklist: document.getElementById("tab-blacklist"),
     records: document.getElementById("tab-records"),
     favorites: document.getElementById("tab-favorites"),
+    agencies: document.getElementById("tab-agencies"),
     settings: document.getElementById("tab-settings"),
   };
 
@@ -22,6 +23,7 @@ document.addEventListener("DOMContentLoaded", () => {
       if (tab.dataset.tab === "blacklist") loadBlacklist();
       if (tab.dataset.tab === "records") loadRecords();
       if (tab.dataset.tab === "favorites") loadFavorites();
+      if (tab.dataset.tab === "agencies") loadAgencies();
     });
   });
 
@@ -294,6 +296,81 @@ document.addEventListener("DOMContentLoaded", () => {
       },
     });
   }
+
+  // ─── AGENCIES ────────────────────────────────────────────────
+  const orgTypeOptions = (selected) => JobGuardData.ORG_TYPES
+    .map(t => `<option value="${escHtml(t)}"${t === selected ? " selected" : ""}>${escHtml(t)}</option>`).join("");
+
+  function agencyMsg(ok, text) {
+    const el = document.getElementById("ag-msg");
+    el.className = `backup-msg ${ok ? "ok" : "err"}`;
+    el.textContent = text;
+  }
+
+  async function loadAgencies() {
+    const { agencies = [] } = await getStore(["agencies"]);
+    document.getElementById("ag-count").textContent = `${agencies.length} staffing / consulting firms listed`;
+    document.getElementById("ag-type-input").innerHTML = orgTypeOptions(JobGuardData.ORG_TYPES[0]);
+    const listEl = document.getElementById("ag-list");
+    listEl.innerHTML = agencies.length
+      ? agencies.map((e, i) => `
+        <div class="bl-row">
+          <div class="bl-info">
+            <div class="bl-name" style="color:#e2eaf4">🏢 ${escHtml(e.name)}</div>
+            <div class="bl-reason-text">${escHtml([e.url, e.note].filter(Boolean).join(" · "))}</div>
+          </div>
+          <select class="field ag-type" data-index="${i}">${orgTypeOptions(e.type)}</select>
+          <button class="rm-btn" data-index="${i}">Remove</button>
+        </div>`).join("")
+      : `<div class="empty-state">No firms listed yet</div>`;
+
+    listEl.onchange = async (e) => {
+      const sel = e.target.closest(".ag-type");
+      if (!sel) return;
+      const i = Number(sel.dataset.index);
+      await setStore({ agencies: agencies.map((x, j) => j === i ? { ...x, type: sel.value } : x) });
+    };
+    listEl.onclick = async (e) => {
+      const btn = e.target.closest(".rm-btn");
+      if (!btn) return;
+      const i = Number(btn.dataset.index);
+      await setStore({ agencies: agencies.filter((_, j) => j !== i) });
+      loadAgencies();
+    };
+  }
+
+  document.getElementById("ag-add-toggle")?.addEventListener("click", () => {
+    const form = document.getElementById("ag-form");
+    const open = form.style.display !== "none";
+    form.style.display = open ? "none" : "block";
+    document.getElementById("ag-add-toggle").textContent = open ? "+ Add" : "✕ Cancel";
+  });
+
+  document.getElementById("ag-save-btn")?.addEventListener("click", async () => {
+    const name = document.getElementById("ag-name-input").value.trim();
+    if (!name) return;
+    const { agencies = [] } = await getStore(["agencies"]);
+    const entry = {
+      name,
+      url: document.getElementById("ag-url-input").value.trim(),
+      type: document.getElementById("ag-type-input").value,
+      note: document.getElementById("ag-note-input").value.trim(),
+    };
+    const i = agencies.findIndex(e => e.name.toLowerCase() === name.toLowerCase());
+    await setStore({ agencies: i >= 0 ? agencies.map((e, j) => j === i ? entry : e) : [...agencies, entry] });
+    ["ag-name-input", "ag-url-input", "ag-note-input"].forEach(id => { document.getElementById(id).value = ""; });
+    document.getElementById("ag-form").style.display = "none";
+    document.getElementById("ag-add-toggle").textContent = "+ Add";
+    loadAgencies();
+  });
+
+  document.getElementById("ag-scan-btn")?.addEventListener("click", async () => {
+    const { agencies = [], records = [] } = await getStore(["agencies", "records"]);
+    const r = JobGuardData.scanRecordsForAgencies(agencies, records);
+    if (r.added) await setStore({ agencies: r.agencies });
+    await loadAgencies();
+    agencyMsg(true, r.added ? `Added ${r.added} firms found in Records.` : "No new staffing or consulting firms found in Records.");
+  });
 
   // ─── BACKUP (export / import) ────────────────────────────────
   const BACKUP_KEYS = ["blacklist", "records", "favorites", "agencies"];

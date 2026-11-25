@@ -187,6 +187,10 @@ describe("buildRecord", () => {
     expect(r.role).toBe("");
     expect(r.redFlags).toEqual([]);
     expect(r.fromCache).toBe(true);
+    expect(D.buildRecord("A", "", { orgType: "IT Consulting", companyType: "IT" }, 1)).toMatchObject({
+      orgType: "IT Consulting",
+      companyType: "IT",
+    });
     expect(D.buildRecord(undefined, "", undefined, 1).company).toBe("");
   });
 });
@@ -227,6 +231,56 @@ describe("toggleFavorite", () => {
   });
   test("handles missing list", () => {
     expect(D.toggleFavorite(undefined, { id: 1, company: "A" }, 1)).toHaveLength(1);
+  });
+});
+
+describe("inferOrgType", () => {
+  test("uses the explicit orgType first", () => {
+    expect(D.inferOrgType("Software / SaaS", "Staffing / Recruiter")).toBe("Staffing / Recruiter");
+    expect(D.inferOrgType("Staffing Agency", "IT Consulting")).toBe("IT Consulting");
+  });
+  test("falls back to keywords in companyType", () => {
+    expect(D.inferOrgType("IT Staffing and Professional Services")).toBe("Staffing / Recruiter");
+    expect(D.inferOrgType("Technology services")).toBe("IT Consulting");
+    expect(D.inferOrgType("Systems integration")).toBe("IT Consulting");
+    // "Other" is not a firm type, so the keyword fallback still applies (same as the web app).
+    expect(D.inferOrgType("Systems integrator", "Other")).toBe("IT Consulting");
+  });
+  test("returns null for ordinary employers and empty input", () => {
+    expect(D.inferOrgType("Financial Services", "Other")).toBeNull();
+    expect(D.inferOrgType()).toBeNull();
+  });
+});
+
+describe("addAgencyIfNew", () => {
+  test("adds a new firm", () => {
+    expect(D.addAgencyIfNew([], " Procom ", "Staffing / Recruiter")).toEqual([
+      { name: "Procom", url: "", type: "Staffing / Recruiter", note: "Auto-added from vetting" },
+    ]);
+  });
+  test("skips duplicates (case-insensitive), blank names and unknown types", () => {
+    const cur = [{ name: "Procom", url: "", type: "Staffing / Recruiter", note: "" }];
+    expect(D.addAgencyIfNew(cur, "PROCOM", "IT Consulting")).toBe(cur);
+    expect(D.addAgencyIfNew(cur, "  ", "IT Consulting")).toBe(cur);
+    expect(D.addAgencyIfNew(cur, "Other Co", "Other")).toBe(cur);
+    expect(D.addAgencyIfNew(undefined, "X", "IT Consulting")).toHaveLength(1);
+  });
+});
+
+describe("scanRecordsForAgencies", () => {
+  test("adds firms found in records and counts them", () => {
+    const records = [
+      { id: 1, company: "Procom", orgType: "Staffing / Recruiter" },
+      { id: 2, company: "Acme Bank", companyType: "Financial Services" },
+      { id: 3, company: "Hays", companyType: "Recruitment agency" },
+      { id: 4, company: "procom", orgType: "Staffing / Recruiter" },
+    ];
+    const r = D.scanRecordsForAgencies([], records);
+    expect(r.added).toBe(2);
+    expect(r.agencies.map((e) => e.name)).toEqual(["Procom", "Hays"]);
+  });
+  test("handles empty input", () => {
+    expect(D.scanRecordsForAgencies(undefined, undefined)).toEqual({ agencies: [], added: 0 });
   });
 });
 

@@ -135,9 +135,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 // Keep a record of every successful vet so the Records tab (and backups) have it.
 function saveRecord(company, role, result) {
   return new Promise(resolve => {
-    chrome.storage.local.get(["records"], r => {
+    chrome.storage.local.get(["records", "agencies"], r => {
       const record = JobGuardData.buildRecord(company, role, result);
-      chrome.storage.local.set({ records: JobGuardData.upsertRecord(r.records, record) }, resolve);
+      const update = { records: JobGuardData.upsertRecord(r.records, record) };
+      // Staffing and IT consulting firms are added to the Agencies list automatically.
+      const type = JobGuardData.inferOrgType(record.companyType, record.orgType);
+      if (type) update.agencies = JobGuardData.addAgencyIfNew(r.agencies, company, type);
+      chrome.storage.local.set(update, resolve);
     });
   });
 }
@@ -181,8 +185,11 @@ Respond ONLY with a JSON object (no markdown, no backticks):
   "redFlags": ["up to 3 short flags"],
   "greenFlags": ["up to 3 short flags"],
   "verificationSteps": ["3 actionable steps"],
-  "recommendation": "APPLY" | "CAUTION" | "AVOID"
-}`;
+  "recommendation": "APPLY" | "CAUTION" | "AVOID",
+  "orgType": "Staffing / Recruiter" | "IT Consulting" | "Other"
+}
+
+orgType: use "Staffing / Recruiter" for a staffing agency, recruiting or headhunting firm, or contract workforce provider (including IT staffing firms such as Procom or Robert Half). Use "IT Consulting" for an IT consulting, IT services or systems integration firm that is not mainly a staffing firm. Use "Other" for everything else.`;
 
   const response = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",

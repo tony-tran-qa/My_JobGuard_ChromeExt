@@ -286,6 +286,8 @@
     .icon-btn:hover { background: #0d1f35; }
     .icon-btn.on { color: #fbbf24; border-color: #7a5c12; }
     .icon-btn.danger { color: #fca5a5; border-color: #5f1e1e; }
+    .ag-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    .ag-type { width: auto; margin: 0 8px; padding: 4px 6px; }
     .backup-msg { font-size: 10px; margin-top: 8px; line-height: 1.5; }
     .backup-msg.ok { color: #6ee7b7; }
     .backup-msg.err { color: #fca5a5; }
@@ -298,10 +300,11 @@
     <button class="open-tab-btn" id="open-tab-btn" title="Open in a full browser tab">⤢ Full tab</button>
     <div class="tabs">
       <button class="tab active" data-tab="vet">Vet</button>
+      <button class="tab" data-tab="records">📋 Records</button>
+      <button class="tab" data-tab="favorites">★ Favorites</button>
+      <button class="tab" data-tab="agencies">🏢 Agencies</button>
       <button class="tab" data-tab="blacklist">Blacklist</button>
-      <button class="tab" data-tab="records">Records</button>
-      <button class="tab" data-tab="favorites">Favorites</button>
-      <button class="tab" data-tab="settings">Settings</button>
+      <button class="tab" data-tab="settings">⚙ Settings</button>
     </div>
   </div>
 
@@ -313,6 +316,36 @@
     <input class="field" id="role-input" placeholder="e.g. Software Engineer..." />
     <button class="btn-primary" id="vet-btn">▶  Run Vetting Check</button>
     <div id="result-area"></div>
+  </div>
+
+  <!-- AGENCIES TAB -->
+  <div class="body" id="tab-agencies" style="display:none">
+    <div class="ag-head">
+      <div id="ag-count" class="rec-count" style="margin-bottom:0">Loading...</div>
+      <div class="rec-actions">
+        <button class="icon-btn" id="ag-scan-btn">↻ Scan Records</button>
+        <button class="icon-btn" id="ag-add-toggle">+ Add</button>
+      </div>
+    </div>
+    <div class="settings-hint" style="margin-bottom:10px">
+      Mark firms that are recruiters or IT consultancies rather than direct employers.
+      A firm is added automatically when a vet identifies it as one.
+    </div>
+    <div id="ag-msg" class="backup-msg" style="margin-top:0; margin-bottom:8px"></div>
+    <div class="add-form" id="ag-form" style="display:none">
+      <label class="label">Company Name</label>
+      <input class="field" id="ag-name-input" placeholder="e.g. Procom" />
+      <label class="label">Website (optional)</label>
+      <input class="field" id="ag-url-input" placeholder="https://example.com" />
+      <label class="label">Type</label>
+      <select class="field" id="ag-type-input"></select>
+      <label class="label">Note (optional)</label>
+      <input class="field" id="ag-note-input" placeholder="Note..." />
+      <div class="add-row">
+        <button class="btn-add-confirm" id="ag-save-btn">Save</button>
+      </div>
+    </div>
+    <div id="ag-list"></div>
   </div>
 
   <!-- BLACKLIST TAB -->

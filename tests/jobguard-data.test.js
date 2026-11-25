@@ -287,3 +287,103 @@ describe("scanRecordsForAgencies", () => {
 test("BACKUP_NAME matches the web app", () => {
   expect(D.BACKUP_NAME).toBe("jobguard-all-records.json");
 });
+
+describe("extractDomain", () => {
+  test.each([
+    ["https://www.anthropic.com/jobs", "anthropic.com"],
+    ["anthropic.com", "anthropic.com"],
+    ["HTTP://Sub.Example.co.uk/x?y=1", "sub.example.co.uk"],
+    ["not a url", ""],
+    ["", ""],
+    [null, ""],
+  ])("%s -> %s", (input, out) => {
+    expect(D.extractDomain(input)).toBe(out);
+  });
+});
+
+describe("parseTab and mergeTab", () => {
+  test("TAB_FILES match the web app file names", () => {
+    expect(D.TAB_FILES).toEqual({
+      blacklist: "jobguard-blacklist.json",
+      records: "jobguard-records.json",
+      favorites: "jobguard-favorites.json",
+      agencies: "jobguard-agencies.json",
+    });
+  });
+  test("blacklist file is cleaned", () => {
+    const out = D.parseTab("blacklist", JSON.stringify([{ name: " Acme " }, { nope: 1 }]));
+    expect(out).toEqual([{ name: "Acme", reason: "Imported" }]);
+  });
+  test("rejects non-list and wrong-shape files", () => {
+    expect(() => D.parseTab("records", "{}")).toThrow(/not a records list/);
+    expect(() => D.parseTab("records", JSON.stringify([{ a: 1 }]))).toThrow(/No records entries/);
+    expect(() => D.parseTab("records", "nope")).toThrow();
+  });
+  test("an empty list is accepted", () => {
+    expect(D.parseTab("favorites", "[]")).toEqual([]);
+  });
+  test("merge never removes and skips duplicates", () => {
+    const a = D.mergeTab("blacklist", [{ name: "A", reason: "x" }], [{ name: "a", reason: "y" }, { name: "B", reason: "z" }]);
+    expect(a.added).toBe(1);
+    expect(a.merged.map((e) => e.name)).toEqual(["A", "B"]);
+    const r = D.mergeTab("records", [{ id: 1, company: "A" }], [{ id: 1, company: "A" }, { id: 2, company: "B" }]);
+    expect(r.added).toBe(1);
+  });
+});
+
+describe("filterRecords", () => {
+  const recs = [
+    { id: 1, ts: 1, company: "Zeta Corp", role: "QA", riskLevel: "LOW", recommendation: "APPLY", ownership: "Public", companyType: "Software" },
+    { id: 2, ts: 3, company: "Procom", role: "SDET", riskLevel: "MEDIUM", recommendation: "CAUTION", ownership: "Private", companyType: "Staffing Agency" },
+    { id: 3, ts: 2, company: "Alpha Scam", role: "Clerk", riskLevel: "HIGH", recommendation: "AVOID", ownership: "Unknown", companyType: "Unknown" },
+  ];
+  const names = (o, ag = []) => D.filterRecords(recs, ag, o).map((r) => r.company);
+
+  test("default sort is newest first", () => {
+    expect(names({})).toEqual(["Procom", "Alpha Scam", "Zeta Corp"]);
+  });
+  test("sorts", () => {
+    expect(names({ sort: "oldest" })).toEqual(["Zeta Corp", "Alpha Scam", "Procom"]);
+    expect(names({ sort: "risk" })).toEqual(["Alpha Scam", "Procom", "Zeta Corp"]);
+    expect(names({ sort: "az" })).toEqual(["Alpha Scam", "Procom", "Zeta Corp"]);
+  });
+  test("search matches company, role and type, case-insensitively", () => {
+    expect(names({ search: "sdet" })).toEqual(["Procom"]);
+    expect(names({ search: "SOFTWARE" })).toEqual(["Zeta Corp"]);
+    expect(names({ search: "zzz" })).toEqual([]);
+  });
+  test("risk, recommendation and ownership filters", () => {
+    expect(names({ filter: "HIGH" })).toEqual(["Alpha Scam"]);
+    expect(names({ filter: "APPLY" })).toEqual(["Zeta Corp"]);
+    expect(names({ filter: "Private" })).toEqual(["Procom"]);
+  });
+  test("agency filters use the Agencies list and the record's own type", () => {
+    expect(names({ filter: "ORG_ANY" })).toEqual(["Procom"]);
+    expect(names({ filter: "Staffing / Recruiter" })).toEqual(["Procom"]);
+    expect(names({ filter: "ORG_NONE" })).toEqual(["Alpha Scam", "Zeta Corp"]);
+    const ag = [{ name: "Zeta Corp", type: "IT Consulting" }];
+    expect(names({ filter: "IT Consulting" }, ag)).toEqual(["Zeta Corp"]);
+  });
+  test("does not mutate the input", () => {
+    const copy = JSON.stringify(recs);
+    D.filterRecords(recs, [], { sort: "az" });
+    expect(JSON.stringify(recs)).toBe(copy);
+  });
+});
+
+test("buildRecord keeps the company intel and URL", () => {
+  const rec = D.buildRecord("Acme", "QA", { ...vet, url: "acme.com", ownership: "Private", headcount: "51-200", headquarters: "Toronto, Canada" }, 5);
+  expect(rec).toMatchObject({ url: "acme.com", ownership: "Private", headcount: "51-200", headquarters: "Toronto, Canada" });
+});
+
+describe("company website on records", () => {
+  test("the URL the user typed wins over the AI's website", () => {
+    const rec = D.buildRecord("Acme", "", { ...vet, url: "https://www.acme.com/jobs", website: "other.com" }, 1);
+    expect(rec.website).toBe("acme.com");
+  });
+  test("falls back to the AI website, and to empty when unknown", () => {
+    expect(D.buildRecord("Acme", "", { ...vet, website: "https://acme.io" }, 1).website).toBe("acme.io");
+    expect(D.buildRecord("Acme", "", { ...vet, website: "Unknown" }, 1).website).toBe("");
+    expect(D.buildRecord("Acme", "", vet, 1).website).toBe("");
+  });
+});

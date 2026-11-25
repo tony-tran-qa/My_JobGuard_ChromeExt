@@ -162,6 +162,27 @@
     }
     .add-bl-btn:hover { background: #2b0808; }
 
+    .via-url { display:flex; gap:6px; align-items:center; font-size:10px; padding:6px 10px; background:#060d14; border:1px solid #1a2f4a; border-radius:5px; margin-bottom:10px; color:#2a5a8c; word-break:break-all; }
+    .via-url a { color:#4a9eff; text-decoration:none; }
+    .intel-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-bottom:10px; padding:8px 10px; background:#060d14; border:1px solid #1a2f4a; border-radius:5px; }
+    .intel-lbl { font-size:8px; letter-spacing:.1em; text-transform:uppercase; color:#2a5a8c; margin-bottom:2px; }
+    .intel-val { font-size:11px; color:#c8d6e5; }
+    .conf-note { font-size:10px; color:#2a5a8c; font-style:italic; margin-bottom:8px; }
+    .step { font-size:10px; color:#8aafc8; line-height:1.4; margin-bottom:3px; padding-left:6px; border-left:2px solid #1e3a5f; }
+    .res-actions { display:flex; gap:8px; margin-top:8px; }
+    .res-actions button { flex:1; margin-top:0; }
+    .recs-btn { background:#0d1520; border:1px solid #1e3a5f; border-radius:4px; color:#4a9eff; font-family:'DM Mono',monospace; font-size:10px; padding:7px; cursor:pointer; }
+    .recs-btn:hover { border-color:#4a9eff; }
+    .toolbar { display:flex; gap:6px; margin-bottom:8px; }
+    .toolbar .field { margin-bottom:0; width:auto; min-width:0; }
+    .tb-search { flex:2; }
+    .tb-sel { flex:1; }
+    .tb-bar { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px; }
+    .tb-bar .rec-count { margin-bottom:0; }
+    .rec-intel { font-size:10px; color:#4a6885; margin-bottom:4px; }
+    .rec-step { font-size:10px; color:#8aafc8; padding-left:6px; border-left:2px solid #1e3a5f; margin-bottom:2px; }
+    #tab-msg { padding:0 16px; }
+
     .blacklisted-card {
       background: #1a0505;
       border: 1px solid #7f1d1d;
@@ -288,6 +309,23 @@
     .icon-btn.danger { color: #fca5a5; border-color: #5f1e1e; }
     .ag-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
     .ag-type { width: auto; margin: 0 8px; padding: 4px 6px; }
+    /* Settings cards (same look as the web app) */
+    .card { background: #0a1218; border: 1px solid #1a2f4a; border-radius: 8px; padding: 16px 18px; margin-bottom: 14px; }
+    .card-title { font-size: 11px; color: #4a9eff; letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 10px; }
+    .card-hint { font-size: 11px; color: #2a5a8c; line-height: 1.7; }
+    .card-hint a { color: #4a9eff; }
+    .btn-row { display: flex; gap: 8px; margin-bottom: 10px; }
+    .btn-row .ghost-btn { flex: 1; }
+    .ghost-btn {
+      padding: 8px 14px; background: #0d1520; border: 1px solid #1e3a5f; border-radius: 5px;
+      color: #4a6885; font-family: 'DM Mono', monospace; font-size: 11px; cursor: pointer; transition: all 0.15s;
+    }
+    .ghost-btn:hover:not(:disabled) { color: #c8d6e5; border-color: #4a6885; }
+    .ghost-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .test-msg { padding: 9px 11px; border-radius: 5px; font-size: 12px; margin-bottom: 10px; }
+    .test-msg.ok { background: #0d2b1a; border: 1px solid #1a5c35; color: #4ade80; }
+    .test-msg.err { background: #1a0a0a; border: 1px solid #7f1d1d; color: #f87171; }
+    .status-line { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #4a6885; }
     .backup-msg { font-size: 10px; margin-top: 8px; line-height: 1.5; }
     .backup-msg.ok { color: #6ee7b7; }
     .backup-msg.err { color: #fca5a5; }
@@ -308,10 +346,14 @@
     </div>
   </div>
 
+  <div id="tab-msg" class="backup-msg"></div>
+
   <!-- VET TAB -->
   <div class="body" id="tab-vet">
     <label class="label">Company Name</label>
     <input class="field" id="company-input" placeholder="e.g. Anthropic, QuickHire..." />
+    <label class="label">Homepage URL (optional)</label>
+    <input class="field" id="url-input" placeholder="🔗 e.g. https://anthropic.com" />
     <label class="label">Role (optional)</label>
     <input class="field" id="role-input" placeholder="e.g. Software Engineer..." />
     <button class="btn-primary" id="vet-btn">▶  Run Vetting Check</button>
@@ -323,6 +365,8 @@
     <div class="ag-head">
       <div id="ag-count" class="rec-count" style="margin-bottom:0">Loading...</div>
       <div class="rec-actions">
+        <button class="icon-btn" data-export="agencies">⬇ Export</button>
+        <button class="icon-btn" data-import="agencies">⬆ Import</button>
         <button class="icon-btn" id="ag-scan-btn">↻ Scan Records</button>
         <button class="icon-btn" id="ag-add-toggle">+ Add</button>
       </div>
@@ -350,6 +394,12 @@
 
   <!-- BLACKLIST TAB -->
   <div class="body" id="tab-blacklist" style="display:none">
+    <div class="tb-bar">
+      <div class="rec-actions">
+        <button class="icon-btn" data-export="blacklist">⬇ Export</button>
+        <button class="icon-btn" data-import="blacklist">⬆ Import</button>
+      </div>
+    </div>
     <button class="add-toggle-btn" id="add-toggle-btn">+ Add Company Manually</button>
     <div class="add-form" id="add-form" style="display:none">
       <label class="label">Company Name</label>
@@ -366,51 +416,79 @@
 
   <!-- RECORDS TAB -->
   <div class="body" id="tab-records" style="display:none">
-    <div id="rec-count" class="rec-count">Loading...</div>
+    <div class="toolbar">
+      <input class="field tb-search" id="rec-search" placeholder="Search company, role, or type..." />
+      <select class="field tb-sel" id="rec-filter"></select>
+      <select class="field tb-sel" id="rec-sort"></select>
+    </div>
+    <div class="tb-bar">
+      <div id="rec-count" class="rec-count">Loading...</div>
+      <div class="rec-actions">
+        <button class="icon-btn" data-export="records">⬇ Export</button>
+        <button class="icon-btn" data-import="records">⬆ Import</button>
+        <button class="icon-btn danger" id="rec-clear-btn">Clear</button>
+      </div>
+    </div>
     <div id="rec-list"></div>
   </div>
 
   <!-- FAVORITES TAB -->
   <div class="body" id="tab-favorites" style="display:none">
-    <div id="fav-count" class="rec-count">Loading...</div>
+    <div class="toolbar">
+      <input class="field tb-search" id="fav-search" placeholder="Search favorites..." />
+    </div>
+    <div class="tb-bar">
+      <div id="fav-count" class="rec-count">Loading...</div>
+      <div class="rec-actions">
+        <button class="icon-btn" data-export="favorites">⬇ Export</button>
+        <button class="icon-btn" data-import="favorites">⬆ Import</button>
+      </div>
+    </div>
     <div id="fav-list"></div>
   </div>
 
   <!-- SETTINGS TAB -->
   <div class="body" id="tab-settings" style="display:none">
-    <div class="settings-row">
-      <label class="label">Anthropic API Key</label>
-      <input class="field" id="api-key-input" type="password" placeholder="sk-ant-..." />
-      <div class="settings-hint">
-        Required for AI vetting. Get your key at
-        <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>
-      </div>
-      <div style="margin-top:8px; display:flex; align-items:center;">
-        <button class="btn-save" id="save-key-btn">Save Key</button>
-        <span class="saved-msg" id="saved-msg" style="display:none">✓ Saved</span>
-      </div>
-    </div>
-    <hr class="divider" />
-    <div class="settings-row">
-      <label class="label">Backup</label>
-      <div class="settings-hint">
-        Export your blacklist, records and favorites to one JSON file, or import a backup.
-        Same format as the JobGuard web app. Importing only adds entries and never deletes.
-      </div>
-      <div style="margin-top:8px; display:flex; gap:8px;">
-        <button class="btn-save" id="export-btn">Export backup</button>
-        <button class="btn-save" id="import-btn">Import backup</button>
+    <div class="card">
+      <div class="card-title">Backup / Export</div>
+      <div class="btn-row">
+        <button class="ghost-btn" id="export-btn">⬇ Export/Backup All</button>
+        <button class="ghost-btn" id="import-btn">⬆ Restore from file</button>
         <input type="file" id="import-file" accept=".json,application/json" style="display:none" />
       </div>
-      <div class="settings-hint" style="margin-top:6px">
-        If the file picker closes this popup, click <strong>Full tab</strong> (top right) and import there.
+      <div class="card-hint">
+        Exports your blacklist, records, favorites and agencies as jobguard-all-records.json, the same file the
+        JobGuard web app uses. Restore merges a backup in without deleting anything. If the file picker closes
+        this popup, click <strong>Full tab</strong> (top right) and restore there.
       </div>
       <div id="backup-msg" class="backup-msg"></div>
     </div>
-    <hr class="divider" />
-    <div class="settings-row">
-      <div class="label" style="margin-bottom:6px">How to use JobGuard</div>
-      <div class="settings-hint" style="line-height:1.8">
+
+    <div class="card">
+      <div class="card-title">Anthropic API Key</div>
+      <input class="field" id="api-key-input" type="password" placeholder="sk-ant-api03-..." />
+      <div class="btn-row">
+        <button class="btn-primary" id="save-key-btn" style="flex:2; width:auto">Save Key</button>
+        <button class="ghost-btn" id="test-key-btn">Test Key</button>
+      </div>
+      <div id="test-msg" class="test-msg" style="display:none"></div>
+      <div class="card-hint">
+        Get your key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a><br/>
+        Stored in your browser only — never sent anywhere except the Anthropic API.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Status</div>
+      <div class="status-line">
+        <div class="status-dot inactive" id="key-status-dot"></div>
+        <div id="key-status-text">Checking...</div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:0">
+      <div class="card-title">How to use JobGuard</div>
+      <div class="card-hint" style="line-height:1.8">
         1. Browse LinkedIn job listings normally<br/>
         2. Look for <strong style="color:#4a9eff">⬡ VET</strong> badges next to companies<br/>
         3. Click any badge or the VET button on job pages<br/>
@@ -425,6 +503,7 @@
     <span id="status-text">Checking...</span>
   </div>
 
+  <input type="file" id="tab-import-file" accept=".json,application/json" style="display:none" />
   <script src="lib/jobguard-data.js"></script>
   <script src="popup.js"></script>
 </body>

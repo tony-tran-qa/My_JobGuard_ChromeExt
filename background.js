@@ -69,9 +69,9 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === "VET_COMPANY") {
-    vetCompany(message.company, message.role)
+    vetCompany(message.company, message.role, message.url)
       .then(async result => {
-        await saveRecord(message.company, message.role, result);
+        await saveRecord(message.company, message.role, { ...result, url: message.url || "" });
         sendResponse({ success: true, result });
       })
       .catch(err => sendResponse({ success: false, error: err.message }));
@@ -154,7 +154,7 @@ function checkBlacklist(blacklist, name) {
   ) || null;
 }
 
-async function vetCompany(company, role = "") {
+async function vetCompany(company, role = "", url = "") {
   // Check cache first
   const cacheKey = `${company}::${role}`.toLowerCase();
   const cached = await new Promise(resolve => {
@@ -167,59 +167,102 @@ async function vetCompany(company, role = "") {
 
   // Get API key
   const apiKey = await new Promise(resolve => {
-    chrome.storage.local.get(["apiKey"], r => resolve(r.apiKey || ""));
+    chrome.storage.local.get(["apiKey"], r => resolve((r.apiKey || "").trim()));
   });
 
   if (!apiKey) {
     throw new Error("No API key set. Please add your Anthropic API key in JobGuard settings.");
   }
+  if (!apiKey.startsWith("sk-")) {
+    throw new Error('API key format is wrong (should start with "sk-ant-"). Fix it in Settings.');
+  }
 
-  const prompt = `You are a job scam detection expert. Analyze this company${role ? ` and role` : ""} for potential fraud on LinkedIn.
+  const urlContext = url ? `\nHomepage URL: "${url}"` : "";
+  const prompt = `You are a company intelligence and job scam detection expert. Analyze this company${role ? " and role" : ""} thoroughly.
 
-Company: "${company}"${role ? `\nRole: "${role}"` : ""}
+Company: "${company}"${role ? `\nRole: "${role}"` : ""}${urlContext}
 
-Respond ONLY with a JSON object (no markdown, no backticks):
+Reply with ONLY raw JSON (no markdown fences, no extra text):
 {
   "riskLevel": "LOW" | "MEDIUM" | "HIGH",
-  "verdict": "one sentence summary under 20 words",
-  "redFlags": ["up to 3 short flags"],
-  "greenFlags": ["up to 3 short flags"],
-  "verificationSteps": ["3 actionable steps"],
   "recommendation": "APPLY" | "CAUTION" | "AVOID",
-  "orgType": "Staffing / Recruiter" | "IT Consulting" | "Other"
+  "verdict": "one concise sentence summarizing legitimacy",
+  "redFlags": ["up to 3 specific red flags"],
+  "greenFlags": ["up to 3 specific green flags"],
+  "verificationSteps": ["step1", "step2", "step3"],
+  "companyType": "e.g. Software / SaaS, Staffing Agency, Financial Services, Healthcare, Retail, Manufacturing, Consulting, etc.",
+  "orgType": "Staffing / Recruiter" | "IT Consulting" | "Other",
+  "ownership": "Public" | "Private" | "Non-Profit" | "Government" | "Unknown",
+  "headcount": "e.g. 1-10, 11-50, 51-200, 201-500, 501-1000, 1001-5000, 5001-10000, 10000+, or Unknown",
+  "annualRevenue": "e.g. <$1M, $1M-$10M, $10M-$50M, $50M-$200M, $200M-$1B, $1B-$10B, $10B+, or Unknown",
+  "founded": "year founded or Unknown",
+  "headquarters": "City, Country or Unknown",
+  "website": "the company's official homepage domain if you know it, e.g. anthropic.com, otherwise Unknown",
+  "confidenceNote": "brief note on data confidence, e.g. Well-known public company, data reliable or Limited public info, estimates only"
 }
 
-orgType: use "Staffing / Recruiter" for a staffing agency, recruiting or headhunting firm, or contract workforce provider (including IT staffing firms such as Procom or Robert Half). Use "IT Consulting" for an IT consulting, IT services or systems integration firm that is not mainly a staffing firm. Use "Other" for everything else.`;
+orgType: use "Staffing / Recruiter" for a staffing agency, recruiting or headhunting firm, or contract workforce provider (including IT staffing firms such as Procom or Robert Half). Use "IT Consulting" for an IT consulting, IT services or systems integration firm that is not mainly a staffing firm. Use "Other" for everything else.
+For well-known companies (Google, Microsoft, Anthropic, etc.) use accurate known data.
+For obscure or likely fake companies, use Unknown for financial fields and note low confidence.
+headcount and annualRevenue should be ranges, not exact figures.${url ? "\nIf a Homepage URL is provided, use the domain to help identify and verify the company. A mismatched or suspicious domain (e.g. typosquatting, free hosting) should be flagged as a red flag." : ""}
+You have no internet access and cannot search. Base your judgment only on the company name, role, and URL given plus your own training knowledge. Never write that a company is missing from, unregistered in, or unverifiable in any database, registry, directory, search engine, LinkedIn, or Glassdoor. If you do not know a company, say only that you do not recognize it.
+Not recognizing a company is NOT evidence of fraud. If you do not recognize the company and the role and URL show no concrete scam signals, use riskLevel MEDIUM and recommendation CAUTION, and say it is unverified.
+These are concrete scam signals, and any ONE of them requires riskLevel HIGH and recommendation AVOID, even if the company is unknown: (1) a role that involves receiving, holding, transferring, or processing money, payments, or checks for the employer; (2) receiving and reshipping packages; (3) vague remote data-entry or clerical work offered by a generic, unidentifiable company; (4) mystery shopping; (5) trading or managing cryptocurrency on someone's behalf; (6) impersonating a government agency or a well-known brand, including a lookalike, typosquatted, cheap-TLD, or free-hosting domain.
+If you list a red flag that matches one of these signals, your recommendation must be AVOID, not CAUTION.`;
 
-  const response = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
-      "anthropic-dangerous-direct-browser-access": "true"
-    },
-    body: JSON.stringify({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 800,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
+  let response;
+  try {
+    response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
+      body: JSON.stringify({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 900,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+  } catch (e) {
+    throw new Error(`Network error: ${e.message}`);
+  }
 
   if (!response.ok) {
-    const err = await response.json();
-    throw new Error(err.error?.message || "API request failed");
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("API key rejected (401). Re-copy it from console.anthropic.com.");
+    }
+    if (response.status === 429) throw new Error("Rate limited. Wait a moment and try again.");
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error?.message || `API request failed (HTTP ${response.status})`);
   }
 
   const data = await response.json();
   const text = data.content?.map(b => b.text || "").join("") || "";
-  const clean = text.replace(/```json|```/g, "").trim();
-  const result = JSON.parse(clean);
+  const match = text.match(/\{[\s\S]*\}/);
+  if (!match) throw new Error("The AI reply had no JSON. Try again.");
+  let result;
+  try { result = JSON.parse(match[0]); } catch (e) { throw new Error("The AI reply could not be read. Try again."); }
 
-  // Cache it for 24 hours
+  // Safe defaults so a short or odd reply never breaks the popup
+  if (!["LOW", "MEDIUM", "HIGH"].includes(result.riskLevel)) result.riskLevel = "MEDIUM";
+  if (!["APPLY", "CAUTION", "AVOID"].includes(result.recommendation)) result.recommendation = "CAUTION";
+  if (!["Public", "Private", "Non-Profit", "Government", "Unknown"].includes(result.ownership)) result.ownership = "Unknown";
+  for (const k of ["redFlags", "greenFlags", "verificationSteps"]) {
+    result[k] = Array.isArray(result[k]) ? result[k] : [];
+  }
+  for (const k of ["companyType", "headcount", "annualRevenue", "founded", "headquarters"]) {
+    result[k] = result[k] || "Unknown";
+  }
+  result.website = result.website || "Unknown";
+  result.confidenceNote = result.confidenceNote || "";
+  result.verdict = result.verdict || "";
+
+  // Cache it (limit 100 entries)
   const newCache = { ...cached };
   newCache[cacheKey] = { ...result, cachedAt: Date.now() };
-  // Limit cache to 100 entries
   const keys = Object.keys(newCache);
   if (keys.length > 100) delete newCache[keys[0]];
   chrome.storage.local.set({ vetCache: newCache });

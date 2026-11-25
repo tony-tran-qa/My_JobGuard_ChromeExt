@@ -33,6 +33,7 @@ JobGuard checks companies as you browse LinkedIn. It flags blacklisted companies
 | 🔄 SPA navigation | MutationObserver re-scans on LinkedIn's client-side route changes |
 | 🏢 Agencies | Staffing and IT consulting firms are tagged automatically when a vet identifies one (the AI is asked for an explicit firm type), or add them by hand; Scan Records finds ones you vetted earlier |
 | 🧾 Records and favorites | Every vet is saved as a record you can star, expand or delete; same record format as the web app |
+| 🔑 Test Key | Settings has a Test Key button (same as the web app) that checks your key with a tiny request |
 | 💾 Backup and restore | Export or import blacklist, records and favorites as one JSON file shared with the JobGuard web app (merge only, nothing is deleted) |
 | 🪟 Full-tab view | The popup is 680px wide; the Full tab button opens the same UI in a browser tab |
 | 🔑 Key managed locally | API key stored in Chrome local storage — never leaves your machine |

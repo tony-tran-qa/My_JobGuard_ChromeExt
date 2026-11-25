@@ -24,6 +24,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (tab.dataset.tab === "records") loadRecords();
       if (tab.dataset.tab === "favorites") loadFavorites();
       if (tab.dataset.tab === "agencies") loadAgencies();
+      // The Settings tab has its own Status card, so hide the footer status there.
+      document.querySelector(".status-row").style.display = tab.dataset.tab === "settings" ? "none" : "flex";
     });
   });
 
@@ -39,6 +41,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ─── VET TAB ─────────────────────────────────────────────────
   const companyInput = document.getElementById("company-input");
   const roleInput = document.getElementById("role-input");
+  const urlInput = document.getElementById("url-input");
   const vetBtn = document.getElementById("vet-btn");
   const resultArea = document.getElementById("result-area");
 
@@ -47,19 +50,39 @@ document.addEventListener("DOMContentLoaded", () => {
     const tab = tabs[0];
     if (tab?.url?.includes("linkedin.com")) {
       chrome.tabs.sendMessage(tab.id, { type: "GET_CURRENT_COMPANY" }, (res) => {
+        if (chrome.runtime.lastError) return;
         if (res?.company) companyInput.value = res.company;
         if (res?.role) roleInput.value = res.role;
       });
     }
   });
 
-  [companyInput, roleInput].forEach(el => {
+  [companyInput, roleInput, urlInput].forEach(el => {
     el.addEventListener("keydown", e => { if (e.key === "Enter") runVet(); });
   });
+  // Typing a URL fills the company name from its domain (only while the name is empty)
+  urlInput.addEventListener("input", () => {
+    if (!companyInput.value.trim() || companyInput.dataset.auto) {
+      const d = JobGuardData.extractDomain(urlInput.value);
+      if (d) {
+        companyInput.value = d;
+        companyInput.dataset.auto = "1";
+      }
+    }
+  });
+  companyInput.addEventListener("input", () => { delete companyInput.dataset.auto; });
   vetBtn.addEventListener("click", runVet);
 
+  const intelCell = (label, value) =>
+    `<div><div class="intel-lbl">${label}</div><div class="intel-val">${escHtml(value || "Unknown")}</div></div>`;
+
   function runVet() {
-    const company = companyInput.value.trim();
+    const urlVal = urlInput.value.trim();
+    let company = companyInput.value.trim();
+    if (!company && urlVal) {
+      company = JobGuardData.extractDomain(urlVal);
+      if (company) companyInput.value = company;
+    }
     const role = roleInput.value.trim();
     if (!company) return;
 
@@ -79,7 +102,7 @@ document.addEventListener("DOMContentLoaded", () => {
       resultArea.innerHTML = `<div class="loading"><div class="spinner"></div> Analyzing with AI...</div>`;
       vetBtn.disabled = true;
 
-      chrome.runtime.sendMessage({ type: "VET_COMPANY", company, role }, (res) => {
+      chrome.runtime.sendMessage({ type: "VET_COMPANY", company, role, url: urlVal }, (res) => {
         vetBtn.disabled = false;
         if (!res?.success) {
           resultArea.innerHTML = `
@@ -95,28 +118,49 @@ document.addEventListener("DOMContentLoaded", () => {
         const riskClass = { LOW: "risk-low", MEDIUM: "risk-medium", HIGH: "risk-high" }[r.riskLevel] || "risk-medium";
         const recClass = { APPLY: "rec-apply", CAUTION: "rec-caution", AVOID: "rec-avoid" }[r.recommendation] || "";
         const recIcon = { APPLY: "✓", CAUTION: "⚠", AVOID: "✕" }[r.recommendation] || "";
+        const site = JobGuardData.extractDomain(urlVal) || JobGuardData.extractDomain(r.website);
 
         resultArea.innerHTML = `
           <div class="result-card">
             <div class="result-header">
               <span class="badge ${riskClass}">${r.riskLevel} RISK</span>
               <span class="badge ${recClass}">${recIcon} ${r.recommendation}</span>
+              ${r.fromCache ? `<span class="rec-meta">⬡ cached</span>` : ""}
             </div>
             <div class="verdict">${escHtml(r.verdict)}</div>
+            <div class="via-url">🏢 <strong style="color:#c8d6e5">${escHtml(company)}</strong>${site ? ` · 🌐 <a href="https://${escHtml(site)}" target="_blank" rel="noopener noreferrer">${escHtml(site)}</a> <span>${urlVal ? "(URL you entered)" : "(AI suggested, verify it yourself)"}</span>` : " · 🌐 website unknown"}</div>
+            <div class="intel-grid">
+              ${intelCell("🏢 Type", r.companyType)}
+              ${intelCell("📊 Ownership", r.ownership)}
+              ${intelCell("👥 Headcount", r.headcount)}
+              ${intelCell("💰 Revenue", r.annualRevenue)}
+              ${intelCell("📅 Founded", r.founded)}
+              ${intelCell("📍 HQ", r.headquarters)}
+            </div>
+            ${r.confidenceNote ? `<div class="conf-note">${escHtml(r.confidenceNote)}</div>` : ""}
             <div class="flags-grid">
               <div>
                 <div class="section-label label-red">🚩 Red Flags</div>
-                ${(r.redFlags || []).map(f => `<div class="flag flag-red">${escHtml(f)}</div>`).join("") || '<div class="empty">None</div>'}
+                ${(r.redFlags || []).map(f => `<div class="flag flag-red">${escHtml(f)}</div>`).join("") || '<div class="empty">None identified</div>'}
               </div>
               <div>
                 <div class="section-label label-green">✓ Green Flags</div>
-                ${(r.greenFlags || []).map(f => `<div class="flag flag-green">${escHtml(f)}</div>`).join("") || '<div class="empty">None</div>'}
+                ${(r.greenFlags || []).map(f => `<div class="flag flag-green">${escHtml(f)}</div>`).join("") || '<div class="empty">None identified</div>'}
               </div>
             </div>
-            <button class="add-bl-btn" id="popup-add-bl">+ Add to Blacklist</button>
+            ${(r.verificationSteps || []).length ? `
+              <div class="section-label">🔍 Verification Steps</div>
+              ${r.verificationSteps.map((s, i) => `<div class="step">${i + 1}. ${escHtml(s)}</div>`).join("")}` : ""}
+            <div class="res-actions">
+              <button class="add-bl-btn" id="popup-add-bl">+ Blacklist</button>
+              <button class="recs-btn" id="popup-go-records">📋 Records</button>
+            </div>
           </div>
         `;
 
+        document.getElementById("popup-go-records")?.addEventListener("click", () => {
+          document.querySelector('.tab[data-tab="records"]').click();
+        });
         document.getElementById("popup-add-bl")?.addEventListener("click", () => {
           chrome.runtime.sendMessage({
             type: "ADD_TO_BLACKLIST",
@@ -188,22 +232,71 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ─── SETTINGS TAB ────────────────────────────────────────────
+  const keyInput = document.getElementById("api-key-input");
+
+  // Updates both the Status card in Settings and the footer status row.
+  function renderKeyStatus(key) {
+    const k = (key || "").trim();
+    const cls = `status-dot ${k ? "" : "inactive"}`;
+    document.getElementById("key-status-dot").className = cls;
+    document.getElementById("key-status-text").textContent = k
+      ? (k.startsWith("sk-") ? "API key set — ready to vet" : 'Key format wrong (should start with "sk-ant-")')
+      : "No API key — add one above";
+    document.getElementById("status-dot").className = cls;
+    document.getElementById("status-text").textContent = k ? "AI vetting active" : "No API key — set one in Settings";
+  }
+
   chrome.runtime.sendMessage({ type: "GET_API_KEY" }, (res) => {
-    if (res?.apiKey) {
-      document.getElementById("api-key-input").value = res.apiKey;
-    }
+    if (res?.apiKey) keyInput.value = res.apiKey;
+    renderKeyStatus(res?.apiKey);
+  });
+
+  keyInput.addEventListener("input", () => {
+    renderKeyStatus(keyInput.value);
+    document.getElementById("test-msg").style.display = "none";
   });
 
   document.getElementById("save-key-btn")?.addEventListener("click", () => {
-    const key = document.getElementById("api-key-input")?.value?.trim();
+    const key = keyInput.value.trim();
+    const btn = document.getElementById("save-key-btn");
     chrome.runtime.sendMessage({ type: "SAVE_API_KEY", apiKey: key }, () => {
-      const msg = document.getElementById("saved-msg");
-      msg.style.display = "inline";
-      setTimeout(() => { msg.style.display = "none"; }, 2000);
-      // Update status
-      document.getElementById("status-dot").className = `status-dot ${key ? "" : "inactive"}`;
-      document.getElementById("status-text").textContent = key ? "AI vetting active" : "No API key set";
+      renderKeyStatus(key);
+      btn.textContent = "✓ Saved!";
+      setTimeout(() => { btn.textContent = "Save Key"; }, 2000);
     });
+  });
+
+  document.getElementById("test-key-btn")?.addEventListener("click", async () => {
+    const btn = document.getElementById("test-key-btn");
+    const box = document.getElementById("test-msg");
+    const show = (ok, text) => {
+      box.style.display = "block";
+      box.className = `test-msg ${ok ? "ok" : "err"}`;
+      box.textContent = text;
+    };
+    const key = keyInput.value.trim();
+    if (!key) { show(false, "Enter a key first."); return; }
+    btn.disabled = true;
+    btn.textContent = "Testing...";
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": key,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({ model: "claude-haiku-4-5-20251001", max_tokens: 10, messages: [{ role: "user", content: "Say OK" }] }),
+      });
+      if (r.ok) show(true, "✓ API key is valid and working!");
+      else if (r.status === 401 || r.status === 403) show(false, "Key rejected (401) — re-copy it from console.anthropic.com.");
+      else show(false, `HTTP ${r.status} — check key and try again.`);
+    } catch (e) {
+      show(false, `Network error: ${e.message}`);
+    }
+    btn.disabled = false;
+    btn.textContent = "Test Key";
   });
 
   // ─── FULL TAB ────────────────────────────────────────────────
@@ -225,6 +318,8 @@ document.addEventListener("DOMContentLoaded", () => {
   function recRowHtml(r, { favorite, showDelete }) {
     const riskClass = { LOW: "risk-low", MEDIUM: "risk-medium", HIGH: "risk-high" }[r.riskLevel] || "risk-medium";
     const recClass = { APPLY: "rec-apply", CAUTION: "rec-caution", AVOID: "rec-avoid" }[r.recommendation] || "";
+    const intel = [r.companyType, r.ownership, r.headcount, r.annualRevenue && `Rev ${r.annualRevenue}`, r.founded && `Est. ${r.founded}`, r.headquarters]
+      .filter(v => v && !/^(Rev |Est\. )?Unknown$/.test(v)).join(" · ");
     const flags = (arr, cls) => (arr || []).map(f => `<div class="flag ${cls}">${escHtml(f)}</div>`).join("");
     return `
       <div class="rec-row" data-id="${escHtml(String(r.id))}">
@@ -242,7 +337,10 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
         <div class="rec-detail">
           <div>${escHtml(r.verdict)}</div>
+          ${intel ? `<div class="rec-intel">${escHtml(intel)}</div>` : ""}
+          ${r.website ? `<div class="rec-intel">🌐 ${escHtml(r.website)}${r.url ? " (URL you entered)" : " (AI suggested)"}</div>` : ""}
           ${flags(r.redFlags, "flag-red")}${flags(r.greenFlags, "flag-green")}
+          ${(r.verificationSteps || []).map((s, i) => `<div class="rec-step">${i + 1}. ${escHtml(s)}</div>`).join("")}
         </div>
       </div>`;
   }
@@ -258,14 +356,36 @@ document.addEventListener("DOMContentLoaded", () => {
     };
   }
 
+  const REC_FILTERS = [
+    ["ALL", "All"], ["ORG_ANY", "Agencies / Consulting (all)"], ["Staffing / Recruiter", "Staffing / Recruiter"],
+    ["IT Consulting", "IT Consulting"], ["ORG_NONE", "Direct employers (not listed)"],
+    ["HIGH", "High Risk"], ["MEDIUM", "Medium Risk"], ["LOW", "Low Risk"],
+    ["AVOID", "Avoid"], ["CAUTION", "Caution"], ["APPLY", "Apply"],
+    ["Public", "Public"], ["Private", "Private"], ["Non-Profit", "Non-Profit"],
+  ];
+  const REC_SORTS = [["newest", "Newest"], ["oldest", "Oldest"], ["risk", "Highest Risk"], ["az", "A → Z"]];
+  const opts = (pairs) => pairs.map(([v, l]) => `<option value="${escHtml(v)}">${escHtml(l)}</option>`).join("");
+  document.getElementById("rec-filter").innerHTML = opts(REC_FILTERS);
+  document.getElementById("rec-sort").innerHTML = opts(REC_SORTS);
+  ["rec-search", "rec-filter", "rec-sort"].forEach(id => {
+    document.getElementById(id).addEventListener(id === "rec-search" ? "input" : "change", () => loadRecords());
+  });
+  document.getElementById("fav-search").addEventListener("input", () => loadFavorites());
+
   async function loadRecords() {
-    const { records = [], favorites = [] } = await getStore(["records", "favorites"]);
+    const { records = [], favorites = [], agencies = [] } = await getStore(["records", "favorites", "agencies"]);
     const favIds = new Set(favorites.map(f => String(f.id)));
-    document.getElementById("rec-count").textContent = `${records.length} vetting records`;
+    const shown = JobGuardData.filterRecords(records, agencies, {
+      search: document.getElementById("rec-search").value,
+      filter: document.getElementById("rec-filter").value,
+      sort: document.getElementById("rec-sort").value,
+    });
+    document.getElementById("rec-count").textContent = shown.length === records.length
+      ? `${records.length} vetting records` : `${shown.length} of ${records.length} vetting records`;
     const listEl = document.getElementById("rec-list");
-    listEl.innerHTML = records.length
-      ? records.map(r => recRowHtml(r, { favorite: favIds.has(String(r.id)), showDelete: true })).join("")
-      : `<div class="empty-state">No vetting records yet. Run a check and it will appear here.</div>`;
+    listEl.innerHTML = shown.length
+      ? shown.map(r => recRowHtml(r, { favorite: favIds.has(String(r.id)), showDelete: true })).join("")
+      : `<div class="empty-state">${records.length ? "No records match your search or filter." : "No vetting records yet. Run a check and it will appear here."}</div>`;
     wireRows(listEl, {
       fav: async (id) => {
         const rec = records.find(r => String(r.id) === id);
@@ -282,13 +402,29 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
+  document.getElementById("rec-clear-btn").addEventListener("click", async (e) => {
+    const btn = e.currentTarget;
+    if (btn.dataset.sure !== "1") {
+      btn.dataset.sure = "1"; btn.textContent = "Sure?";
+      setTimeout(() => { btn.dataset.sure = ""; btn.textContent = "Clear"; }, 3000);
+      return;
+    }
+    btn.dataset.sure = ""; btn.textContent = "Clear";
+    await setStore({ records: [] });
+    loadRecords();
+  });
+
   async function loadFavorites() {
     const { favorites = [] } = await getStore(["favorites"]);
-    document.getElementById("fav-count").textContent = `${favorites.length} favorites`;
+    const q = document.getElementById("fav-search").value.trim().toLowerCase();
+    const shown = favorites.filter(r => !q ||
+      [r.company, r.role, r.companyType].some(v => String(v || "").toLowerCase().includes(q)));
+    document.getElementById("fav-count").textContent = shown.length === favorites.length
+      ? `${favorites.length} favorites` : `${shown.length} of ${favorites.length} favorites`;
     const listEl = document.getElementById("fav-list");
-    listEl.innerHTML = favorites.length
-      ? favorites.map(r => recRowHtml(r, { favorite: true, showDelete: false })).join("")
-      : `<div class="empty-state">No favorites yet. Star a record to keep it here.</div>`;
+    listEl.innerHTML = shown.length
+      ? shown.map(r => recRowHtml(r, { favorite: true, showDelete: false })).join("")
+      : `<div class="empty-state">${favorites.length ? "No favorites match your search." : "No favorites yet. Star a record to keep it here."}</div>`;
     wireRows(listEl, {
       fav: async (id) => {
         await setStore({ favorites: favorites.filter(f => String(f.id) !== id) });
@@ -296,6 +432,53 @@ document.addEventListener("DOMContentLoaded", () => {
       },
     });
   }
+
+  // ─── PER-TAB EXPORT / IMPORT (same files as the web app) ─────
+  const tabMsgEl = document.getElementById("tab-msg");
+  let tabMsgTimer;
+  function tabMsg(ok, text) {
+    tabMsgEl.className = `backup-msg ${ok ? "ok" : "err"}`;
+    tabMsgEl.textContent = text;
+    clearTimeout(tabMsgTimer);
+    tabMsgTimer = setTimeout(() => { tabMsgEl.textContent = ""; }, 6000);
+  }
+  const tabReload = { blacklist: () => loadBlacklist(), records: () => loadRecords(), favorites: () => loadFavorites(), agencies: () => loadAgencies() };
+  const tabImportFile = document.getElementById("tab-import-file");
+  let importKind = null;
+
+  document.addEventListener("click", async (e) => {
+    const ex = e.target.closest("[data-export]");
+    const im = e.target.closest("[data-import]");
+    if (ex) {
+      const kind = ex.dataset.export;
+      const data = (await getStore([kind]))[kind] || [];
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+      a.download = JobGuardData.TAB_FILES[kind];
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+      tabMsg(true, `Exported ${data.length} ${kind} to ${JobGuardData.TAB_FILES[kind]}.`);
+    } else if (im) {
+      importKind = im.dataset.import;
+      tabImportFile.click();
+    }
+  });
+  tabImportFile.addEventListener("change", async () => {
+    const file = tabImportFile.files[0];
+    const kind = importKind;
+    if (!file || !kind) return;
+    try {
+      const incoming = JobGuardData.parseTab(kind, await file.text());
+      const current = (await getStore([kind]))[kind] || [];
+      const { merged, added } = JobGuardData.mergeTab(kind, current, incoming);
+      await setStore({ [kind]: merged });
+      tabMsg(true, `Imported ${kind} (merged, nothing deleted). Added ${added} new, ${incoming.length - added} already there.`);
+      tabReload[kind]();
+    } catch (err) {
+      tabMsg(false, `Import failed: ${err.message}`);
+    }
+    tabImportFile.value = "";
+  });
 
   // ─── AGENCIES ────────────────────────────────────────────────
   const orgTypeOptions = (selected) => JobGuardData.ORG_TYPES

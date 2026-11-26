@@ -156,12 +156,12 @@ function checkBlacklist(blacklist, name) {
 
 async function vetCompany(company, role = "", url = "") {
   // Check cache first
-  const cacheKey = `${company}::${role}`.toLowerCase();
+  const cacheKey = JobGuardData.buildVetCacheKey(company, role, url);
   const cached = await new Promise(resolve => {
     chrome.storage.local.get(["vetCache"], r => resolve(r.vetCache || {}));
   });
 
-  if (cached[cacheKey]) {
+  if (JobGuardData.isVetCacheFresh(cached[cacheKey])) {
     return { ...cached[cacheKey], fromCache: true };
   }
 
@@ -186,6 +186,7 @@ Reply with ONLY raw JSON (no markdown fences, no extra text):
 {
   "riskLevel": "LOW" | "MEDIUM" | "HIGH",
   "recommendation": "APPLY" | "CAUTION" | "AVOID",
+  "triggeredSignals": [numbers 1 to 6 of the concrete scam signals listed below that clearly apply, or [] if none apply],
   "verdict": "one concise sentence summarizing legitimacy",
   "redFlags": ["up to 3 specific red flags"],
   "greenFlags": ["up to 3 specific green flags"],
@@ -208,7 +209,7 @@ headcount and annualRevenue should be ranges, not exact figures.${url ? "\nIf a 
 You have no internet access and cannot search. Base your judgment only on the company name, role, and URL given plus your own training knowledge. Never write that a company is missing from, unregistered in, or unverifiable in any database, registry, directory, search engine, LinkedIn, or Glassdoor. If you do not know a company, say only that you do not recognize it.
 Not recognizing a company is NOT evidence of fraud. If you do not recognize the company and the role and URL show no concrete scam signals, use riskLevel MEDIUM and recommendation CAUTION, and say it is unverified.
 These are concrete scam signals, and any ONE of them requires riskLevel HIGH and recommendation AVOID, even if the company is unknown: (1) a role that involves receiving, holding, transferring, or processing money, payments, or checks for the employer; (2) receiving and reshipping packages; (3) vague remote data-entry or clerical work offered by a generic, unidentifiable company; (4) mystery shopping; (5) trading or managing cryptocurrency on someone's behalf; (6) impersonating a government agency or a well-known brand, including a lookalike, typosquatted, cheap-TLD, or free-hosting domain.
-If you list a red flag that matches one of these signals, your recommendation must be AVOID, not CAUTION.`;
+Only cite a signal if the company, role or URL clearly shows it. A name that sounds generic, a .com or other common domain, a company you do not know, or being a job board or job aggregator is NOT a scam signal and must not be listed as a red flag. If none of the six signals applies, riskLevel must not be HIGH and recommendation must not be AVOID.`;
 
   let response;
   try {
@@ -223,6 +224,7 @@ If you list a red flag that matches one of these signals, your recommendation mu
       body: JSON.stringify({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 900,
+        temperature: 0,
         messages: [{ role: "user", content: prompt }],
       }),
     });
@@ -259,6 +261,9 @@ If you list a red flag that matches one of these signals, your recommendation mu
   result.website = result.website || "Unknown";
   result.confidenceNote = result.confidenceNote || "";
   result.verdict = result.verdict || "";
+
+  // Enforce the scoring rule in code: HIGH / AVOID needs a cited concrete signal
+  JobGuardData.applyGuardrails(result);
 
   // Cache it (limit 100 entries)
   const newCache = { ...cached };

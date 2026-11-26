@@ -387,3 +387,76 @@ describe("company website on records", () => {
     expect(D.buildRecord("Acme", "", vet, 1).website).toBe("");
   });
 });
+
+
+describe("applyGuardrails", () => {
+  const jobgetherLike = () => ({
+    riskLevel: "HIGH",
+    recommendation: "AVOID",
+    verdict: "Generic name, no verifiable identity",
+    redFlags: ["generic name"],
+    greenFlags: [],
+    verificationSteps: [],
+    confidenceNote: "Limited public info",
+    triggeredSignals: [],
+  });
+
+  test("caps HIGH/AVOID at MEDIUM/CAUTION when no signal is cited, and adds a note", () => {
+    const r = D.applyGuardrails(jobgetherLike());
+    expect(r.riskLevel).toBe("MEDIUM");
+    expect(r.recommendation).toBe("CAUTION");
+    expect(r.downgraded).toBe(true);
+    expect(r.confidenceNote).toContain("Limited public info");
+    expect(r.confidenceNote).toContain("Capped at CAUTION");
+  });
+
+  test("treats a missing triggeredSignals field the same as none", () => {
+    const x = jobgetherLike();
+    delete x.triggeredSignals;
+    expect(D.applyGuardrails(x).recommendation).toBe("CAUTION");
+  });
+
+  test("a valid signal forces HIGH/AVOID even if the model said LOW", () => {
+    const r = D.applyGuardrails({ riskLevel: "LOW", recommendation: "APPLY", triggeredSignals: [4] });
+    expect(r.riskLevel).toBe("HIGH");
+    expect(r.recommendation).toBe("AVOID");
+    expect(r.downgraded).toBeUndefined();
+  });
+
+  test("drops invalid signals (0, 7, text, duplicates) and then applies the cap", () => {
+    expect(D.normalizeSignals([0, 7, "x", 2, "2", 2.5, null])).toEqual([2]);
+    const r = D.applyGuardrails({ riskLevel: "HIGH", recommendation: "AVOID", triggeredSignals: [0, 7, "x"] });
+    expect(r.recommendation).toBe("CAUTION");
+  });
+
+  test("leaves MEDIUM/CAUTION and LOW/APPLY results alone", () => {
+    const m = D.applyGuardrails({ riskLevel: "MEDIUM", recommendation: "CAUTION" });
+    expect(m.riskLevel).toBe("MEDIUM");
+    expect(m.downgraded).toBeUndefined();
+    const l = D.applyGuardrails({ riskLevel: "LOW", recommendation: "APPLY" });
+    expect(l.recommendation).toBe("APPLY");
+  });
+});
+
+describe("buildVetCacheKey", () => {
+  test("includes the homepage domain, ignoring www and case", () => {
+    expect(D.buildVetCacheKey("Jobgether", "", "https://www.Jobgether.com/jobs")).toBe("jobgether::::jobgether.com");
+  });
+  test("different URL gives a different key; no URL still works", () => {
+    expect(D.buildVetCacheKey("Acme", "QA", "acme.com")).not.toBe(D.buildVetCacheKey("Acme", "QA", "acme.net"));
+    expect(D.buildVetCacheKey("Acme", "QA")).toBe("acme::qa::");
+  });
+});
+
+describe("isVetCacheFresh", () => {
+  const now = 1_000_000_000_000;
+  const day = 24 * 60 * 60 * 1000;
+  test("fresh under 24 hours, expired at exactly 24 hours", () => {
+    expect(D.isVetCacheFresh({ cachedAt: now - day + 1 }, now)).toBe(true);
+    expect(D.isVetCacheFresh({ cachedAt: now - day }, now)).toBe(false);
+  });
+  test("missing entry or missing timestamp is not fresh", () => {
+    expect(D.isVetCacheFresh(undefined, now)).toBe(false);
+    expect(D.isVetCacheFresh({}, now)).toBe(false);
+  });
+});
